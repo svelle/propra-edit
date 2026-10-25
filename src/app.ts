@@ -15,6 +15,7 @@ import { syncAnnotation } from "./editor/slice";
 import { glossaryTerms, termInsertion } from "./glossary/model";
 import { GlossaryPanel, type TermUsage } from "./panels/glossary-panel";
 import { PreviewPanel } from "./panels/preview";
+import { openLogs, type LogTab } from "./panels/logs";
 import { BuildPanel } from "./panels/build-panel";
 import { locateProblem, type BuildProblem } from "./build/output";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -84,7 +85,7 @@ export class App {
   private statusLeft = h("span", { class: "status-left" });
   private statusPos = h("span", { class: "status-pos" });
   private statusRight = h("span", { class: "status-right" });
-  private statusLt = h("button", { class: "status-lt", title: de.grammar.restartHint });
+  private statusLt = h("button", { class: "status-lt", title: de.logs.statusHint });
   private grammar!: GrammarService;
   private statusProblems = h("button", { class: "status-problems", title: de.problems.title });
   private partMap: Map<string, PartRef> | null = null;
@@ -119,11 +120,7 @@ export class App {
       this.grammarSettings(),
     );
     void backend.getDictionary().then((w) => this.grammar.setDictionary(w)).catch(() => {});
-    this.statusLt.addEventListener("click", () => {
-      this.ltStatus = { state: "starting", message: null };
-      this.updateLtStatus();
-      void backend.ltRestart().catch((e) => toast(String(e), "error"));
-    });
+    this.statusLt.addEventListener("click", () => void this.showLogs("languagetool"));
     this.tree = new FileTree(
       {
         open: (p) => void this.openFile(p),
@@ -272,6 +269,7 @@ export class App {
       btn(de.preview.toolbar, de.preview.toolbarTitle(`${modKey()}+Shift+V`), () => this.togglePreview()),
       btn(de.build.toolbar, de.build.toolbarTitle(`${modKey()}+B`), () => void this.buildPanel.run()),
       h("span", { class: "spacer" }),
+      btn(de.logs.toolbar, de.logs.toolbarTitle, () => void this.showLogs("app")),
       btn("⚙", de.toolbar.settings, () => void this.openSettings()),
     );
     const sidebar = h("aside", { class: "sidebar" }, this.tree.dom);
@@ -1168,12 +1166,28 @@ export class App {
 
   // ----- status bar
 
+  private showLogs(tab: LogTab) {
+    return openLogs(
+      {
+        read: () => backend.readLogs(),
+        openDir: () => backend.openLogDir(),
+        restartLt: async () => {
+          this.ltStatus = { state: "starting", message: null };
+          this.updateLtStatus();
+          await backend.ltRestart();
+        },
+        ltStatus: () => this.ltStatus,
+      },
+      tab,
+    );
+  }
+
   private updateLtStatus() {
     if (!this.grammar) return;
     const st = this.ltStatus;
     this.statusLt.textContent = ltLabel(st, this.settings.grammarEnabled, this.grammar.client.pending);
     this.statusLt.className = `status-lt lt-${st.state}`;
-    this.statusLt.title = [st.message, de.grammar.restartHint].filter(Boolean).join("\n");
+    this.statusLt.title = [st.message?.split("\n")[0], de.logs.statusHint].filter(Boolean).join("\n");
   }
 
   private lastProblemCount = -1;

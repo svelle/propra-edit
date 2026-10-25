@@ -124,6 +124,9 @@ export const backend = {
   ltCheck: (data: string, disabledRules: string[], enabledRules: string[]) =>
     invoke<string>("lt_check", { data, language: "de-DE", disabledRules, enabledRules }),
   courseCss: () => invoke<string>("course_css"),
+  readLogs: () => invoke<{ dir: string; app: string; languagetool: string }>("read_logs"),
+  openLogDir: () => invoke<void>("open_log_dir"),
+  logFrontend: (level: "error" | "info", message: string) => invoke<void>("log_frontend", { level, message }),
   coursePath: (rel: string) => invoke<string>("course_path", { rel }),
   buildDefaultOutdir: () => invoke<string>("build_default_outdir"),
   buildStart: (command: string, outdir: string) => invoke<[number, string]>("build_start", { command, outdir }),

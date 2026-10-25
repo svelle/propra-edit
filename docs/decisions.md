@@ -362,3 +362,20 @@ Still to do: the same measurements on macOS and Windows (the user's machines).
 - Not done: Windows end-to-end test (CI only compiles it), ANSI cursor movement (progress
   bars; sedrila prints none in author builds).
 
+## Logs and error reporting
+
+- **App log** `propra-editor.log` and `languagetool.log` live in the app's log directory
+  (Windows `%LOCALAPPDATA%\de.svelle.propra-editor\logs`, macOS
+  `~/Library/Logs/de.svelle.propra-editor`). The app log records start-up, LanguageTool
+  location/start/ready/errors, builds, panics, uncaught frontend errors and every error toast.
+  Rotated at 2 MB (app) and 4 MB (LanguageTool), one old file kept.
+- `languagetool.log` was truncated on every start, so after the automatic restarts the first
+  failure was gone. It is now appended, with a `===== <time> Start: <java> -cp …` header per
+  start. Start errors carry the Java exit code and the last lines Java wrote for that start.
+- **Log viewer:** toolbar „Logs“, or click the LanguageTool status (that click used to restart
+  LanguageTool directly; restarting is now a button in the viewer). „Alles kopieren“ puts
+  status, folder and both logs into the clipboard in one go, for bug reports.
+- Windows can report resource paths as `\\?\C:\…`; Java may not expand `lib\*` classpath
+  wildcards in that form, so the prefix is dropped for the Java, jar and work directory paths.
+  Not confirmed as the cause of the reported Windows failure; the new log will show.
+

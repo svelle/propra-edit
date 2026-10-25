@@ -1,6 +1,7 @@
 //! Rust core: owns the file system access, the course index and the file watcher,
 //! and exposes them to the frontend as Tauri commands and events.
 
+pub mod applog;
 pub mod build;
 pub mod course;
 pub mod fs;
@@ -205,9 +206,47 @@ async fn lt_status(state: State<'_, AppState>) -> Result<lt::LtStatus, String> {
 #[tauri::command]
 async fn lt_restart(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     let lt = lt_handle(&state)?;
-    lt.set_location(lt_location(&app));
+    let location = lt_location(&app);
+    if let Err(e) = &location {
+        applog::error(format!("LanguageTool nicht gefunden: {e}"));
+    }
+    applog::info("LanguageTool: Neustart angefordert");
+    lt.set_location(location);
     lt.restart();
     Ok(())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LogInfo {
+    dir: String,
+    app: String,
+    languagetool: String,
+}
+
+/// Paths and the last 256 KB of both logs, for the log viewer.
+#[tauri::command]
+async fn read_logs(app: AppHandle) -> LogInfo {
+    let dir = log_dir(&app);
+    LogInfo {
+        dir: dir.to_string_lossy().into_owned(),
+        app: applog::tail(&dir.join(applog::APP_LOG), 256 * 1024),
+        languagetool: applog::tail(&dir.join(applog::LT_LOG), 256 * 1024),
+    }
+}
+
+/// Open the log directory in Finder/Explorer.
+#[tauri::command]
+fn open_log_dir(app: AppHandle) -> Result<(), String> {
+    let dir = log_dir(&app);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| format!("Ordner konnte nicht geöffnet werden ({}): {e}", dir.display()))
+}
+
+/// Errors from the frontend (uncaught exceptions, error toasts) go into the app log too.
+#[tauri::command]
+fn log_frontend(level: String, message: String) {
+    applog::write(if level == "error" { "ERROR" } else { "INFO" }, &format!("[UI] {message}"));
 }
 
 /// Check annotated text (LanguageTool's `data` JSON). Returns LanguageTool's JSON response.
@@ -253,14 +292,27 @@ fn lt_location(app: &AppHandle) -> Result<lt::LtLocation, String> {
     lt::locate(resources.as_deref(), path_setting("ltJava"), path_setting("ltLibDir"))
 }
 
-fn start_languagetool(app: &AppHandle) {
-    let work_dir = app
-        .path()
+/// Directory for propra-editor.log and languagetool.log.
+fn log_dir(app: &AppHandle) -> PathBuf {
+    app.path()
         .app_log_dir()
         .or_else(|_| app.path().app_cache_dir())
-        .unwrap_or_else(|_| std::env::temp_dir().join("propra-editor"));
+        .unwrap_or_else(|_| std::env::temp_dir().join("propra-editor"))
+}
+
+fn start_languagetool(app: &AppHandle) {
+    let work_dir = log_dir(app);
     let app2 = app.clone();
-    let lt = lt::LanguageTool::new(lt_location(app), work_dir, Arc::new(move |s| {
+    let location = lt_location(app);
+    if let Err(e) = &location {
+        applog::error(format!("LanguageTool nicht gefunden: {e}"));
+    }
+    let lt = lt::LanguageTool::new(location, work_dir, Arc::new(move |s: &lt::LtStatus| {
+        match s.state.as_str() {
+            "error" => applog::error(format!("LanguageTool: {}", s.message.as_deref().unwrap_or("Fehler"))),
+            "ready" => applog::info("LanguageTool bereit"),
+            _ => {}
+        }
         let _ = app2.emit("lt-status", s);
     }));
     lt.restart();
@@ -340,10 +392,16 @@ async fn build_start(app: AppHandle, state: State<'_, AppState>, command: String
         Arc::new(move |l| {
             let _ = a1.emit("build-line", l);
         }),
-        Arc::new(move |d| {
+        Arc::new(move |d: build::BuildDone| {
+            match (&d.error, d.cancelled) {
+                (Some(e), _) => applog::error(format!("Build konnte nicht gestartet werden: {e}")),
+                (None, true) => applog::info("Build abgebrochen"),
+                (None, false) => applog::info(format!("Build beendet (Exit-Code {:?}, {} ms)", d.code, d.elapsed_ms)),
+            }
             let _ = a2.emit("build-done", d);
         }),
     )?;
+    applog::info(format!("Build gestartet: {cmdline}"));
     Ok((id, cmdline))
 }
 
@@ -474,6 +532,9 @@ pub fn run() {
             course_css,
             build_default_outdir,
             course_path,
+            read_logs,
+            open_log_dir,
+            log_frontend,
             build_start,
             build_cancel,
             sedrila_test,
@@ -486,6 +547,19 @@ pub fn run() {
             save_dictionary,
         ])
         .setup(|app| {
+            let dir = log_dir(app.handle());
+            applog::init(&dir);
+            applog::info(format!(
+                "ProPra Editor {} gestartet ({} {})",
+                app.package_info().version,
+                std::env::consts::OS,
+                std::env::consts::ARCH
+            ));
+            let default_hook = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                applog::error(format!("Panic: {info}"));
+                default_hook(info);
+            }));
             start_languagetool(app.handle());
             Ok(())
         })

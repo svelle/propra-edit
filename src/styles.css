@@ -448,3 +448,14 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
   .ansi-magenta { color: #c98ce0; } .ansi-cyan { color: #5cc8d0; }
   .bp-status.bp-bad { color: #ef6b6b; } .bp-status.bp-good { color: #7bc47f; }
 }
+
+/* ----- log viewer */
+.dialog.dialog-wide { max-width: min(1100px, 92vw); width: 92vw; }
+.logs { display: flex; flex-direction: column; gap: 8px; }
+.logs-status { padding: 6px 10px; border-radius: 4px; background: var(--bg-side); }
+.logs-status.lt-error { background: rgba(211, 47, 47, 0.12); }
+.logs-message { margin: 4px 0 0; white-space: pre-wrap; font: 12px/1.4 var(--editor-font); max-height: 9em; overflow: auto; }
+.logs-tabs { display: flex; align-items: center; gap: 4px; }
+.logs-actions { display: flex; gap: 6px; }
+.logs-text { height: 50vh; width: 100%; box-sizing: border-box; font: 12px/1.4 var(--editor-font); resize: vertical; white-space: pre; }
+.logs-dir { user-select: all; }

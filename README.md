@@ -22,6 +22,11 @@ sedrila build with problems linked to files.
    „sedrila testen“. The `SEDRILA_*` variables that propra-inf's `sedrila.yaml` needs are
    read from your shell configuration, as in a terminal.
 
+## Problems
+
+„Logs“ in the toolbar (or a click on the LanguageTool status) shows the app and LanguageTool
+logs. „Alles kopieren“ copies both, ready to paste into a bug report.
+
 ## Shortcuts
 
 | Shortcut | Action |

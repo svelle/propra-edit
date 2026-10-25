@@ -10,7 +10,8 @@
 //! per request; with it, a sentence takes a few dozen milliseconds (see docs/decisions.md).
 
 use serde::Serialize;
-use std::fs::File;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -63,6 +64,15 @@ fn has_jars(dir: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Drop Windows' `\\?\` prefix: Java does not expand `lib\*` classpath wildcards in such paths.
+pub fn plain_path(p: PathBuf) -> PathBuf {
+    let s = p.to_string_lossy();
+    match s.strip_prefix(r"\\?\") {
+        Some(rest) if !rest.starts_with("UNC\\") => PathBuf::from(rest),
+        _ => p,
+    }
+}
+
 fn java_in(jre: &Path) -> PathBuf {
     jre.join("bin").join(if cfg!(windows) { "java.exe" } else { "java" })
 }
@@ -70,15 +80,32 @@ fn java_in(jre: &Path) -> PathBuf {
 /// Find Java and the LanguageTool jars. Explicit settings win; then the bundled resources
 /// (`<resources>/jre`, `<resources>/languagetool/lib`); Java falls back to `java` on PATH.
 pub fn locate(resource_dir: Option<&Path>, java_override: Option<PathBuf>, lib_override: Option<PathBuf>) -> Result<LtLocation, String> {
+    let resource_dir = resource_dir.map(|r| plain_path(r.to_path_buf()));
+    let resource_dir = resource_dir.as_deref();
     let lib = lib_override
         .filter(|d| has_jars(d))
         .or_else(|| resource_dir.map(|r| r.join("languagetool").join("lib")).filter(|d| has_jars(d)))
-        .ok_or("LanguageTool wurde nicht gefunden. Für Entwicklungs-Builds: scripts/fetch-runtime ausführen.")?;
+        .ok_or_else(|| {
+            format!(
+                "LanguageTool wurde nicht gefunden (gesucht in {}). Für Entwicklungs-Builds: scripts/fetch-runtime ausführen.",
+                resource_dir.map(|r| r.join("languagetool").join("lib").display().to_string()).unwrap_or_else(|| "–".into())
+            )
+        })?;
     let java = java_override
         .filter(|j| j.is_file())
         .or_else(|| resource_dir.map(|r| java_in(&r.join("jre"))).filter(|j| j.is_file()))
         .unwrap_or_else(|| PathBuf::from(if cfg!(windows) { "java.exe" } else { "java" }));
     Ok(LtLocation { java, lib })
+}
+
+/// The last `n` non-empty lines written after the most recent "===== … Start" header.
+fn lines_of_last_start(log: &str, n: usize) -> Vec<String> {
+    let since = match log.rfind("\n===== ") {
+        Some(i) => log[i + 1..].split_once('\n').map(|(_, rest)| rest).unwrap_or(""),
+        None => log,
+    };
+    let lines: Vec<String> = since.lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect();
+    lines[lines.len().saturating_sub(n)..].to_vec()
 }
 
 pub fn free_port() -> std::io::Result<u16> {
@@ -109,6 +136,7 @@ pub struct LanguageTool {
 impl LanguageTool {
     /// `work_dir` receives the properties file and `languagetool.log`.
     pub fn new(location: Result<LtLocation, String>, work_dir: PathBuf, on_status: StatusCallback) -> Self {
+        let work_dir = plain_path(work_dir);
         LanguageTool {
             inner: Arc::new((
                 Mutex::new(Inner {
@@ -194,9 +222,24 @@ impl LanguageTool {
         std::fs::create_dir_all(&self.work_dir).map_err(|e| e.to_string())?;
         let props = self.work_dir.join("languagetool.properties");
         std::fs::write(&props, SERVER_PROPERTIES).map_err(|e| e.to_string())?;
-        let log = File::create(self.work_dir.join("languagetool.log")).map_err(|e| e.to_string())?;
-        let log2 = log.try_clone().map_err(|e| e.to_string())?;
+        // appended, not truncated: the first failure must survive the automatic restarts
+        let log_path = self.log_path();
+        if std::fs::metadata(&log_path).map(|m| m.len() > 4 * 1024 * 1024).unwrap_or(false) {
+            let _ = std::fs::rename(&log_path, log_path.with_extension("log.1"));
+        }
+        let mut log = OpenOptions::new().create(true).append(true).open(&log_path).map_err(|e| format!("{}: {}", log_path.display(), e))?;
         let classpath = format!("{}{}*", loc.lib.display(), std::path::MAIN_SEPARATOR);
+        let _ = writeln!(
+            log,
+            "\n===== {} Start: {} -cp {} {} --port {}",
+            crate::applog::timestamp(),
+            loc.java.display(),
+            classpath,
+            SERVER_CLASS,
+            port
+        );
+        let log2 = log.try_clone().map_err(|e| e.to_string())?;
+        crate::applog::info(format!("LanguageTool startet: java={} lib={} port={port}", loc.java.display(), loc.lib.display()));
         let mut cmd = Command::new(&loc.java);
         cmd.args(["-Xmx1g", "-XX:+UseSerialGC", "-Dfile.encoding=UTF-8", "-cp"])
             .arg(classpath)
@@ -233,18 +276,18 @@ impl LanguageTool {
         let url = format!("http://127.0.0.1:{port}/v2/languages");
         loop {
             if self.child_exited(generation) {
-                return Err("LanguageTool wurde beim Start beendet (siehe languagetool.log)".into());
+                return Err(self.with_log_tail(format!("LanguageTool wurde beim Start beendet ({})", self.exit_info(generation))));
             }
             if ureq::get(&url).timeout(Duration::from_secs(2)).call().is_ok() {
                 break;
             }
             if start.elapsed() > STARTUP_TIMEOUT {
-                return Err("LanguageTool antwortet nicht (Zeitüberschreitung beim Start)".into());
+                return Err(self.with_log_tail(format!("LanguageTool antwortet nicht (Zeitüberschreitung nach {} s beim Start)", STARTUP_TIMEOUT.as_secs())));
             }
             std::thread::sleep(Duration::from_millis(200));
         }
         self.set_status(generation, LtStatus::new("starting", Some("Wird aufgewärmt …".into())));
-        post_check(port, &[("language", "de-DE"), ("text", WARMUP_TEXT)])?;
+        post_check(port, &[("language", "de-DE"), ("text", WARMUP_TEXT)]).map_err(|e| self.with_log_tail(format!("Aufwärmen fehlgeschlagen: {e}")))?;
         {
             let mut g = self.inner.0.lock().unwrap();
             if g.generation != generation {
@@ -267,8 +310,38 @@ impl LanguageTool {
                 if ready_at.elapsed() > Duration::from_secs(300) {
                     self.inner.0.lock().unwrap().restarts = 0;
                 }
-                return Err("LanguageTool ist abgestürzt".into());
+                return Err(self.with_log_tail(format!("LanguageTool ist abgestürzt ({})", self.exit_info(generation))));
             }
+        }
+    }
+
+    pub fn log_path(&self) -> PathBuf {
+        self.work_dir.join(crate::applog::LT_LOG)
+    }
+
+    /// "Exit-Code 1" (or similar) for the exited child of this generation.
+    fn exit_info(&self, generation: u64) -> String {
+        let mut g = self.inner.0.lock().unwrap();
+        if g.generation != generation {
+            return "beendet".into();
+        }
+        match g.child.as_mut().map(|c| c.try_wait()) {
+            Some(Ok(Some(st))) => match st.code() {
+                Some(c) => format!("Exit-Code {c}"),
+                None => format!("{st}"),
+            },
+            Some(Err(e)) => e.to_string(),
+            _ => "beendet".into(),
+        }
+    }
+
+    /// Append the last lines of languagetool.log, which usually name the cause.
+    fn with_log_tail(&self, msg: String) -> String {
+        let lines = lines_of_last_start(&crate::applog::tail(&self.log_path(), 16 * 1024), 8);
+        if lines.is_empty() {
+            format!("{msg}. Keine Ausgabe von Java in {}", crate::applog::LT_LOG)
+        } else {
+            format!("{msg}. Letzte Zeilen aus {}:\n{}", crate::applog::LT_LOG, lines.join("\n"))
         }
     }
 
@@ -348,6 +421,20 @@ fn post_check(port: u16, form: &[(&str, &str)]) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn log_lines_only_from_the_last_start() {
+        let log = "alt 1\n\n===== t Start: java\nalt 2\n\n===== t Start: java\nError: Could not find main class\n";
+        assert_eq!(lines_of_last_start(log, 8), vec!["Error: Could not find main class"]);
+        assert!(lines_of_last_start("\n===== t Start: java\n", 8).is_empty());
+    }
+
+    #[test]
+    fn plain_path_strips_verbatim_prefix() {
+        assert_eq!(plain_path(PathBuf::from(r"\\?\C:\Program Files\x")), PathBuf::from(r"C:\Program Files\x"));
+        assert_eq!(plain_path(PathBuf::from(r"\\?\UNC\server\share")), PathBuf::from(r"\\?\UNC\server\share"));
+        assert_eq!(plain_path(PathBuf::from("/opt/x")), PathBuf::from("/opt/x"));
+    }
 
     #[test]
     fn locate_reports_missing_jars() {

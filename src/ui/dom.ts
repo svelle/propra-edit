@@ -61,7 +61,15 @@ export function showDialog<T>(opts: { title: string; body: Node | string; button
 }
 
 let toastTimer: number | undefined;
+let errorSink: ((msg: string) => void) | null = null;
+
+/** Error toasts are also written to the app log (set up in main.ts). */
+export function setErrorSink(fn: (msg: string) => void) {
+  errorSink = fn;
+}
+
 export function toast(msg: string, kind: "info" | "error" = "info") {
+  if (kind === "error") errorSink?.(msg);
   let el = document.getElementById("toast");
   if (!el) {
     el = h("div", { id: "toast" });
