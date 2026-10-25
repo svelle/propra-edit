@@ -1,0 +1,40 @@
+# Kleiner Testkurs für den ProPra-Editor (Struktur wie propra-inf)
+title: Testkurs
+name: testkurs
+baseresourcedir: baseresources
+chapterdir: ch
+altdir: altdir/ch
+itreedir: altdir/itree.zip
+stages: ['draft', 'alpha', 'beta']
+blockmacro_topmatter:
+  # --- builtin blockmacros:
+  section_background: "<h2>Hintergrund</h2>"
+  section_background_default: ""
+  section_goal: "<h2>Ziel</h2>"
+  section_goal_product: "Product"
+  section_goal_idea: "Idea"
+  section_goal_experience: "Experience"
+  section_goal_trial: "Trial"
+  section_instructions: "<h2>Arbeitsschritte</h2>"
+  section_instructions_detailed: "Detailed"
+  section_instructions_loose: "Loose"
+  section_instructions_tricky: "Tricky"
+  section_submission: "<h2>Abgabe</h2>"
+  section_submission_reflection: "Reflection"
+  section_submission_information: "Information"
+  section_submission_snippet: "Snippet"
+  section_submission_trace: "Trace"
+  section_submission_program: "Program"
+  hint: "<strong>Hinweis (nur bei Bedarf):</strong> {arg1}"
+  # --- user-defined blockmacros:
+  INSTRUCTOR: "<h2>Kontrolle Tutor_in: {arg1}</h2>"
+  WARNING: "<strong>Warnung:</strong>"
+  NOTICE: "<strong>Bemerkung:</strong>"
+chapters:
+  - name: Basis
+    taskgroups:
+      - name: Shell
+      - name: Git
+  - name: Sprachen
+    taskgroups:
+      - name: Python

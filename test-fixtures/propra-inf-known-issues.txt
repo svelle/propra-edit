@@ -1,0 +1,20 @@
+# Problems the golden parser test finds in a real propra-inf checkout (as of 2026-10-25).
+# They are content problems in propra-inf, not parser bugs: sedrila does not check
+# X/ENDX pairing, a macro call split over two lines is not a call, and `set[URL]`
+# in unprotected code is a macro call for sedrila too.
+# Remove lines when propra-inf fixes them; the test only fails for problems NOT listed here.
+Bestandscode/Festpreisprojekt/OSS-Produkt-verbessern4.md:20: [SECTION] wird nicht geschlossen
+Bibliotheken/Pandas/pd-Datenbereinigung.md:24: [SECTION] wird nicht geschlossen
+Programmierpraxis/Python-linkcheck/linkcheck-core.md:99: unknown macro [URL]
+Programmierpraxis/Python-linkcheck/linkcheck-core.md:113: unknown macro [URL]
+Programmierpraxis/Python-linkcheck/linkcheck-heuristics.md:22: [SECTION] wird nicht geschlossen
+Programmierpraxis/Python-linkcheck/linkcheck-testbase.md:23: [SECTION] wird nicht geschlossen
+Programmierpraxis/Python-mlh/mlh-linkcheck.md:19: [SECTION] wird nicht geschlossen
+Sprachen/Python/py-List-Comprehensions.md:11: [SECTION] wird nicht geschlossen
+Web/JavaScript/js-Eventhandling.md:25: [SECTION] wird nicht geschlossen
+Werkzeuge/Benutzerverwaltung/Dateiberechtigungen.md:19: [SECTION] wird nicht geschlossen
+Werkzeuge/Git/git-Anpassen.md:124: [ENDINSTRUCTOR] ohne passendes [INSTRUCTOR]
+Werkzeuge/Git/git-Rebase.md:157: [ENDINSTRUCTOR] ohne passendes [INSTRUCTOR]
+Werkzeuge/Git/git-Rebase.md:48: [SECTION] wird nicht geschlossen
+Werkzeuge/Unix-Basiswerkzeuge/Shell-Grundlagen.md:31: [SECTION] wird nicht geschlossen
+Werkzeuge/Unix-Basiswerkzeuge/Umgang-mit-Verzeichnissen.md:19: [SECTION] wird nicht geschlossen
