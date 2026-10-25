@@ -231,3 +231,31 @@ Still to do: the same measurements on macOS and Windows (the user's machines).
   Phase 4 (definition rendering and the side panel come there).
 - **Problems panel:** CodeMirror's lint panel (Cmd/Ctrl+Shift+M, F8 for the next problem),
   plus a „⚠ N“ button in the status bar.
+
+## Phase 4: glossary
+
+- **Live model:** the term map (names, definition text, TERM/TERM0) is parsed in the frontend
+  (`src/glossary/model.ts`) from the glossary tab if it is open, including unsaved edits,
+  otherwise from disk. Hovers, TERMREF/explains lints, completion and the speller's accepted
+  words all use it, so a new term takes effect without saving.
+- **Side panel:** a second editor showing one `[TERM]` block of glossary.md ("slice editor",
+  `src/editor/slice.ts`: the whole document is loaded, the rest is hidden and cannot be
+  entered or edited). glossary.md is opened as a (background) tab and is the master document;
+  edits sync both ways, the tab shows the unsaved state, Cmd/Ctrl+S in the panel saves it.
+  The panel keeps its own undo history; panel edits are not added to the tab's history.
+- **New term quick fix** („Begriff im Glossar anlegen“ on unknown TERMREF/explains, or F12 on
+  an unknown term): inserted at sedrila's sort position (casefold, backquotes ignored,
+  code-point order) inside the matching `## X` letter section; a missing letter heading is
+  created. The insertion is a normal, undoable edit of the glossary tab and is shown in the
+  panel right away instead of a separate diff dialog; nothing is written until saved.
+- **Glossary lints:** `glossary-duplicate` (a name defined twice) and `glossary-order`
+  (sedrila's "not in alphabetical order" warning). The propra-inf glossary has neither.
+- **Hover rendering:** markdown-it with a small macro approximation (`src/preview/render.ts`),
+  the start of the Phase 6 preview.
+- **markdown-it 15.0.3** is only 9 days old (rule: two weeks). 15.0.2 has two published
+  denial-of-service advisories (GHSA-vfgh-jcmw-g37q, GHSA-gfr2-rv44-r23c) fixed in 15.0.3,
+  so the security patch release wins.
+- **„Wo verwendet?“** scans all Markdown files in chapterdir for TERMREF/TERMREF2 and
+  `explains:` (Rust, `course/usages.rs`); cached until the next file change.
+- A global error handler shows unexpected JavaScript errors as a toast (the webview console
+  is not reachable in release builds).

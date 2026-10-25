@@ -356,3 +356,34 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .cm-tooltip-autocomplete ul li[aria-selected] { background: var(--bg-active) !important; color: var(--fg) !important; }
 .cm-tooltip-autocomplete .cm-completionDetail { color: var(--fg-dim); font-style: normal; margin-left: 8px; }
 .cm-completionInfo { padding: 4px 8px !important; font-size: 12px; }
+
+/* ----- right panel (glossary) */
+.rightpanel { display: flex; flex-direction: column; min-width: 260px; background: var(--bg-side); border-left: 1px solid var(--border); }
+.rightpanel[hidden] { display: none; }
+.rp-header { display: flex; align-items: center; padding: 6px 8px 4px 12px; }
+.rp-heading { font-weight: 600; flex: 1; }
+.rp-close { background: transparent; border: none; font-size: 16px; padding: 0 6px; color: var(--fg-dim); }
+.rp-search { margin: 0 8px 6px; }
+.rp-outline { flex: 0 0 auto; max-height: 28%; overflow: auto; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.rp-item { padding: 2px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-item:hover { background: var(--bg-hover); }
+.rp-item.active { background: var(--bg-active); }
+.rp-syn { color: var(--fg-dim); font-size: 11.5px; margin-left: 6px; }
+.rp-term-title { padding: 8px 12px 4px; font-weight: 600; }
+.rp-editor { flex: 1 1 auto; min-height: 120px; overflow: hidden; margin: 0 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); }
+.rp-editor .cm-editor { height: 100%; }
+.rp-editor .cm-scroller { font-family: var(--editor-font); font-size: calc(var(--editor-font-size) - 1px); line-height: 1.5; }
+.rp-usages { flex: 0 0 auto; max-height: 30%; overflow: auto; padding: 6px 0 10px; }
+.rp-usages-title { padding: 2px 12px 4px; font-weight: 600; font-size: 12px; color: var(--fg-dim); }
+.rp-usage { display: flex; gap: 8px; padding: 2px 12px; cursor: pointer; font-size: 12px; }
+.rp-usage:hover { background: var(--bg-hover); }
+.rp-usage-file { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-usage-line { color: var(--fg-dim); }
+.cm-slice-hidden { height: 0; }
+.cm-pm-hover-def { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 12.5px; line-height: 1.45; }
+.cm-pm-hover-def p { margin: 0 0 6px; }
+.cm-pm-hover-def code { font-family: var(--editor-font); font-size: 0.95em; background: var(--tok-mono-bg); padding: 0 2px; border-radius: 2px; }
+.cm-pm-hover-edit { margin-top: 4px; font-size: 12px; padding: 1px 8px; }
+.pv-termref { color: var(--pm-ref); }
+.pv-partref { color: var(--pm-ref); font-style: italic; }
+.pv-enum { display: inline-block; padding: 0 4px; border-radius: 6px; background: var(--pm-enum); color: var(--bg); font-size: 0.8em; font-weight: 700; }

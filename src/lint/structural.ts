@@ -4,6 +4,7 @@
 import type { MacroCall, ProPraDoc, TopMatterEntry } from "../editor/parser";
 import { EREF_TO_ENUM } from "../editor/macros";
 import { de } from "../i18n/de";
+import { duplicateNames, glossaryTerms, outOfOrder } from "../glossary/model";
 
 export type FileKind = "task" | "taskgroup" | "chapter" | "glossary" | "include" | "other";
 
@@ -60,6 +61,8 @@ export const LINT_IDS = [
   "topmatter-explains-chapter",
   "topmatter-assumes",
   "topmatter-requires",
+  "glossary-duplicate",
+  "glossary-order",
 ] as const;
 export type LintId = (typeof LINT_IDS)[number];
 
@@ -198,6 +201,15 @@ export function structuralLints(doc: ProPraDoc, ctx: LintContext): LintFinding[]
         add("eref-range", call.from, call.to, "warning", m.erefRange(call.name, call.args[0], kind, counts[kind]));
       }
     }
+  }
+
+  // ----- glossary file
+  if (ctx.fileKind === "glossary") {
+    const terms = glossaryTerms(doc);
+    for (const [name, ts] of duplicateNames(terms)) {
+      for (const t of ts.slice(1)) add("glossary-duplicate", t.call.argRanges[0]?.from ?? t.from, t.call.argRanges[0]?.to ?? t.to, "error", m.glossaryDuplicate(name, ts[0].line + 1));
+    }
+    for (const t of outOfOrder(terms)) add("glossary-order", t.call.argRanges[0]?.from ?? t.from, t.call.argRanges[0]?.to ?? t.to, "warning", m.glossaryOrder(t.names[0] ?? ""));
   }
 
   // ----- top matter

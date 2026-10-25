@@ -8,7 +8,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { backend, events, type CourseIndex, type LtStatus, type TextFile } from "./backend";
 import { findPartByPath, hasTopMatter, openableItems, parserConfigFor, partNames } from "./course";
 import { GrammarService } from "./grammar/grammar";
-import { EditorSelection } from "@codemirror/state";
+import { ChangeSet, EditorSelection, Transaction } from "@codemirror/state";
+import { parseProPra } from "./editor/parser";
+import { embeddedEditorExtensions } from "./editor/setup";
+import { syncAnnotation } from "./editor/slice";
+import { glossaryTerms, termInsertion } from "./glossary/model";
+import { GlossaryPanel, type TermUsage } from "./panels/glossary-panel";
 import { diagnosticCount, forceLinting, openLintPanel } from "@codemirror/lint";
 import { lintRefresh } from "./editor/refresh";
 import { propraAssist } from "./lint/assist";
@@ -68,6 +73,10 @@ export class App {
   private glossaryMap: Map<string, TermRef> | null = null;
   private includeCache = new Map<string, IncludeStatus>();
   private ltStatus: LtStatus = { state: "starting", message: null };
+  private glossaryPanel!: GlossaryPanel;
+  private glossaryDiskText: string | null = null;
+  private glossaryTimer: number | undefined;
+  private usagesCache: Promise<TermUsage[]> | null = null;
 
   async start(root: HTMLElement) {
     this.settings = await loadSettings();
@@ -108,7 +117,26 @@ export class App {
       dispatchTransactions: (trs, view) => {
         view.update(trs);
         if (this.active) this.active.state = view.state;
+        if (this.active && this.active === this.glossaryTab()) {
+          for (const tr of trs) {
+            if (!tr.docChanged || tr.annotation(syncAnnotation)) continue;
+            this.glossaryPanel.pushExternal(tr.changes);
+            this.onGlossaryChanged();
+          }
+        }
       },
+    });
+    this.glossaryPanel = new GlossaryPanel({
+      masterDoc: () => this.glossaryTab()?.state.doc ?? null,
+      applyToMaster: (changes) => this.applyToGlossary(changes, false),
+      extensions: () => embeddedEditorExtensions(parserConfigFor(this.index), true, [propraEnv.of(this.makeEnv(this.index?.glossary?.path ?? "")), propraAssist(), this.grammar.extension()]),
+      parserConfig: () => parserConfigFor(this.index),
+      usages: () => (this.usagesCache ??= backend.termUsages().catch(() => [])),
+      open: (p, line) => void this.openAt(p, line),
+      picked: (pos) => {
+        if (this.active && this.active === this.glossaryTab()) this.view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: "start", yMargin: 40 }) });
+      },
+      closed: () => this.view.focus(),
     });
     this.buildLayout(root);
     this.bindGlobalKeys();
@@ -135,6 +163,7 @@ export class App {
       btn(de.toolbar.newTask, `${de.toolbar.newTask} (${modKey()}+N)`, () => void this.newTask()),
       btn(de.toolbar.save, `${de.toolbar.save} (${modKey()}+S)`, () => void this.saveActive()),
       btn(de.toolbar.quickOpen, `${de.toolbar.quickOpen} (${modKey()}+P)`, () => this.quickOpen()),
+      btn(de.glossary.toolbar, de.glossary.toolbarTitle, () => void this.toggleGlossary()),
       h("span", { class: "spacer" }),
       btn("⚙", de.toolbar.settings, () => void this.openSettings()),
     );
@@ -160,7 +189,27 @@ export class App {
       this.view.focus();
     });
     const status = h("footer", { class: "statusbar" }, this.statusLeft, this.statusPos, this.statusProblems, h("span", { class: "spacer" }), this.statusRight, this.statusLt);
-    root.replaceChildren(toolbar, h("div", { class: "workspace" }, sidebar, resizer, main), status);
+    const rightResizer = h("div", { class: "resizer" });
+    const panel = this.glossaryPanel.dom;
+    panel.style.width = `${this.settings.rightPanelWidth}px`;
+    rightResizer.addEventListener("pointerdown", (e) => {
+      if (panel.hidden) return;
+      rightResizer.setPointerCapture(e.pointerId);
+      const startX = e.clientX;
+      const startW = panel.offsetWidth;
+      const move = (ev: PointerEvent) => (panel.style.width = `${Math.max(260, Math.min(900, startW - (ev.clientX - startX)))}px`);
+      rightResizer.addEventListener("pointermove", move);
+      rightResizer.addEventListener(
+        "pointerup",
+        () => {
+          rightResizer.removeEventListener("pointermove", move);
+          this.settings.rightPanelWidth = panel.offsetWidth;
+          saveSettings(this.settings);
+        },
+        { once: true },
+      );
+    });
+    root.replaceChildren(toolbar, h("div", { class: "workspace" }, sidebar, resizer, main, rightResizer, panel), status);
   }
 
   private applyFontSettings() {
@@ -236,12 +285,105 @@ export class App {
         tg.zipdirs.forEach(addPart);
       }
     }
-    this.glossaryMap = new Map();
-    for (const t of index.glossaryTerms) for (const n of t.names) this.glossaryMap.set(n, { names: t.names, line: t.line, term0: t.term0 });
+    this.usagesCache = null;
     this.grammar.setAcceptedNames([...partNames(index), ...index.glossaryTerms.flatMap((t) => t.names)]);
+    void this.loadGlossaryFromDisk();
     this.tree.setIndex(index);
     this.tree.setActive(this.active?.path ?? null);
     this.updateStatus();
+  }
+
+  // ----- glossary
+
+  private glossaryTab(): Tab | undefined {
+    const p = this.index?.glossary?.path;
+    return p ? this.tabs.find((t) => t.path === p) : undefined;
+  }
+
+  private async loadGlossaryFromDisk() {
+    const p = this.index?.glossary?.path;
+    if (!p) {
+      this.glossaryDiskText = null;
+      return this.recomputeGlossary();
+    }
+    try {
+      this.glossaryDiskText = (await backend.readTextFile(p)).text;
+    } catch {
+      this.glossaryDiskText = null;
+    }
+    this.recomputeGlossary();
+  }
+
+  private onGlossaryChanged() {
+    window.clearTimeout(this.glossaryTimer);
+    this.glossaryTimer = window.setTimeout(() => this.recomputeGlossary(), 250);
+  }
+
+  /** Rebuild the term map from the glossary tab (if open, including unsaved edits) or from disk. */
+  private recomputeGlossary() {
+    const tab = this.glossaryTab();
+    const text = tab ? tab.state.doc.toString() : this.glossaryDiskText;
+    if (text === null) {
+      this.glossaryMap = null;
+    } else {
+      const map = new Map<string, TermRef>();
+      for (const t of glossaryTerms(parseProPra(text, parserConfigFor(this.index)))) {
+        const ref: TermRef = { names: t.names, line: t.line, term0: t.term0, body: text.slice(t.bodyFrom, t.bodyTo) };
+        for (const n of t.names) if (!map.has(n)) map.set(n, ref);
+      }
+      this.glossaryMap = map;
+    }
+    if (this.index) this.grammar.setAcceptedNames([...partNames(this.index), ...(this.glossaryMap?.keys() ?? [])]);
+    this.glossaryPanel.refresh();
+    this.refreshLints();
+  }
+
+  /** Apply a change to glossary.md (its tab), from the panel or a quick fix. */
+  private applyToGlossary(changes: ChangeSet, addToHistory: boolean) {
+    const tab = this.glossaryTab();
+    if (!tab) return;
+    const annotations = [syncAnnotation.of(true), Transaction.addToHistory.of(addToHistory)];
+    if (tab === this.active) this.view.dispatch({ changes, annotations });
+    else tab.state = tab.state.update({ changes, annotations }).state;
+    this.renderTabs();
+    this.onGlossaryChanged();
+  }
+
+  private async ensureGlossaryTab(): Promise<Tab | null> {
+    const p = this.index?.glossary?.path;
+    if (!p) {
+      toast(de.glossary.noGlossary, "error");
+      return null;
+    }
+    return this.glossaryTab() ?? (await this.openFile(p, { activate: false }));
+  }
+
+  private async toggleGlossary() {
+    if (this.glossaryPanel.visible) return this.glossaryPanel.hide();
+    if (await this.ensureGlossaryTab()) this.glossaryPanel.show();
+  }
+
+  private async openTerm(name: string) {
+    if (await this.ensureGlossaryTab()) this.glossaryPanel.show(name);
+  }
+
+  private async createTerm(name: string) {
+    const tab = await this.ensureGlossaryTab();
+    if (!tab) return;
+    name = name.trim();
+    const doc = tab.state.doc;
+    const exists = glossaryTerms(parseProPra(doc.toString(), parserConfigFor(this.index))).some((t) => t.names.includes(name));
+    if (exists) {
+      toast(de.glossary.exists(name));
+      return this.glossaryPanel.show(name);
+    }
+    const ins = termInsertion(parseProPra(doc.toString(), parserConfigFor(this.index)), name);
+    const changes = ChangeSet.of({ from: ins.from, insert: ins.insert }, doc.length);
+    this.applyToGlossary(changes, true); // undoable in the glossary tab
+    this.glossaryPanel.pushExternal(changes);
+    this.recomputeGlossary();
+    this.glossaryPanel.show(name, ins.cursor);
+    toast(de.glossary.created(name));
   }
 
   private async restoreTabs() {
@@ -307,6 +449,8 @@ export class App {
       },
       listDir: (partial, itree) => backend.listIncludeDir(path, partial, itree),
       open: (p, line) => void this.openAt(p, line),
+      openTerm: (name) => void this.openTerm(name),
+      createTerm: (name) => void this.createTerm(name),
       silenced: () => this.settings.silencedLints[rel()] ?? [],
       silence: (id) => {
         const r = rel();
@@ -415,6 +559,7 @@ export class App {
       if (choice === "cancel") return false;
       if (choice === "save" && !(await this.saveTab(tab))) return false;
     }
+    if (tab === this.glossaryTab()) this.glossaryPanel.hide();
     const i = this.tabs.indexOf(tab);
     this.tabs.splice(i, 1);
     if (this.active === tab) {
@@ -483,6 +628,12 @@ export class App {
   // ----- saving
 
   private async saveActive() {
+    const g = this.glossaryTab();
+    if (g && this.glossaryPanel.hasFocus()) {
+      if (g === this.active) g.state = this.view.state;
+      await this.saveTab(g);
+      return;
+    }
     if (this.active) {
       this.active.state = this.view.state;
       await this.saveTab(this.active);
@@ -550,6 +701,9 @@ export class App {
 
   private async onFilesChanged(paths: string[]) {
     const changed = new Set(paths);
+    this.usagesCache = null;
+    const gp = this.index?.glossary?.path;
+    if (gp && changed.has(gp) && !this.glossaryTab()) void this.loadGlossaryFromDisk();
     if (this.includeCache.size) {
       this.includeCache.clear();
       this.refreshLints();
@@ -600,6 +754,10 @@ export class App {
     tab.eol = file.eol;
     tab.bom = file.bom;
     if (tab === this.active) this.view.setState(tab.state);
+    if (tab === this.glossaryTab()) {
+      this.glossaryPanel.reset();
+      this.onGlossaryChanged();
+    }
     this.lastDirty.set(tab, false);
     this.renderTabs();
   }

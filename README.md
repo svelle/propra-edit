@@ -4,9 +4,9 @@ A lean desktop editor (macOS, Windows) for writing German task files for the
 [propra-inf](https://github.com/fubinf/propra-inf) course, built with
 [sedrila](https://github.com/fubinf/sedrila).
 
-Status: Phases 1 to 3 of `docs/PLAN.md`: file tree, tabs, ProPra highlighting, atomic
+Status: Phases 1 to 5 of `docs/PLAN.md`: file tree, tabs, ProPra highlighting, atomic
 saving, file watching, offline grammar and spell checking with a bundled LanguageTool,
-structural lints and top matter assistance.
+structural lints, top matter assistance, glossary panel, inline altdir solutions.
 
 ## Use
 
@@ -30,4 +30,5 @@ structural lints and top matter assistance.
 | Cmd/Strg+. | Schnellkorrektur an der Cursorposition |
 | Cmd/Strg+Shift+M | Problemliste |
 | F8 | Nächstes Problem |
+| F12 / Cmd/Strg+Klick | Zur Definition (Part, Glossarbegriff, eingebundene Datei) |
 | Cmd/Strg+Alt+[ / ] | Block falten / entfalten |

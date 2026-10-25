@@ -71,6 +71,8 @@ describe("structural lints: every lint triggers and stays quiet", () => {
     ["topmatter-explains-chapter", "title: K\nexplains: Shell\n---\n", "title: K\n---\n", "chapter"],
     ["topmatter-assumes", TM.replace("---", "assumes: Shell-Einstieg, Gibtsnicht\n---"), TM.replace("---", "assumes: Shell-Einstieg, Git\n---")],
     ["topmatter-requires", TM.replace("---", "requires: Gibtsnicht\n---"), TM.replace("---", "requires: Shell-Pipes\n---")],
+    ["glossary-duplicate", "title: G\n---\n[TERM0::Bash|Shell]\n\n[TERM0::Shell]\n", "title: G\n---\n[TERM0::Bash]\n\n[TERM0::Shell]\n", "glossary"],
+    ["glossary-order", "title: G\n---\n[TERM0::Shell]\n\n[TERM0::Bash]\n", "title: G\n---\n[TERM0::`ls`]\n\n[TERM0::Shell]\n", "glossary"],
   ];
   for (const [id, bad, good, kind] of cases) {
     it(id, () => {

@@ -1,6 +1,7 @@
 // Structural lints as a CodeMirror lint source.
 
 import type { Extension } from "@codemirror/state";
+import type { EditorView } from "@codemirror/view";
 import { linter, type Diagnostic } from "@codemirror/lint";
 import { propraDoc } from "../editor/propra-language";
 import { lintRefresh } from "../editor/refresh";
@@ -45,7 +46,12 @@ export function structuralLinter(): Extension {
           message: f.message,
           source: `ProPra: ${f.id}`,
           markClass: "cm-pm-lint",
-          actions: [{ name: de.lint.silence, apply: () => env.silence(f.id) }],
+          actions: [
+            ...(f.id === "termref-unknown" || f.id === "topmatter-explains"
+              ? [{ name: de.lint.createTerm, apply: (v: EditorView, from: number, to: number) => env.createTerm(v.state.sliceDoc(from, to)) }]
+              : []),
+            { name: de.lint.silence, apply: () => env.silence(f.id) },
+          ],
         }));
     },
     { delay: 300, needsRefresh: (u) => u.transactions.some((tr) => tr.effects.some((e) => e.is(lintRefresh))) },

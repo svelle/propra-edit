@@ -1,7 +1,8 @@
 // Top matter and macro assistance: completion, hover tooltips, Cmd/Ctrl+click navigation.
 
 import type { EditorState, Extension } from "@codemirror/state";
-import { EditorView, hoverTooltip, type Tooltip } from "@codemirror/view";
+import { EditorView, hoverTooltip, keymap, type Tooltip } from "@codemirror/view";
+import { renderFragment } from "../preview/render";
 import { autocompletion, type Completion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
 import { buildMacroTable } from "../editor/macros";
 import { propraDoc, propraFileInfo } from "../editor/propra-language";
@@ -195,8 +196,18 @@ const propraHover = hoverTooltip(async (view, pos): Promise<Tooltip | null> => {
     dom = tooltipDom(target.part.title ?? target.part.name, target.part.rel, de.assist.clickToOpen);
   } else if (target.kind === "term") {
     if (!target.term) return null;
-    const synonyms = target.term.names.filter((n) => n !== target.term!.names[0]);
-    dom = tooltipDom(target.term.names[0], synonyms.length ? de.assist.synonyms(synonyms) : de.assist.noSynonyms, target.term.term0 ? de.assist.term0 : de.assist.clickToOpen);
+    const term = target.term;
+    const synonyms = term.names.filter((n) => n !== term.names[0]);
+    dom = tooltipDom(term.names[0], synonyms.length ? de.assist.synonyms(synonyms) : de.assist.noSynonyms);
+    const def = document.createElement("div");
+    def.className = "cm-pm-hover-def";
+    if (term.term0 || !term.body.trim()) def.textContent = de.assist.term0;
+    else def.innerHTML = renderFragment(term.body, view.state.facet(propraFileInfo).cfg);
+    const edit = document.createElement("button");
+    edit.className = "cm-pm-hover-edit";
+    edit.textContent = de.assist.editTerm;
+    edit.addEventListener("click", () => env.openTerm(term.names[0]));
+    dom.append(def, edit);
   } else {
     const st = await resolveInclude(env, target.call).catch(() => null);
     if (!st?.path) return null;
@@ -217,13 +228,26 @@ const modClick = EditorView.domEventHandlers({
     const t = hit.target;
     if (t.kind === "part") env.open(t.part.path);
     else if (t.kind === "term") {
-      const g = env.glossaryPath();
-      if (g && t.term) env.open(g, t.term.line);
+      if (t.term) env.openTerm(t.term.names[0]);
     } else void resolveInclude(env, t.call).then((st) => st?.exists && st.path && env.open(st.path));
     return true;
   },
 });
 
+/** F12: go to the definition of the part, term or include at the cursor. */
+function goToDefinition(view: EditorView): boolean {
+  const hit = targetAt(view.state, view.state.selection.main.head);
+  const env = view.state.facet(propraEnv);
+  if (!hit || !env) return false;
+  const t = hit.target;
+  if (t.kind === "part") env.open(t.part.path);
+  else if (t.kind === "term") {
+    if (t.term) env.openTerm(t.term.names[0]);
+    else env.createTerm(t.name);
+  } else void resolveInclude(env, t.call).then((st) => st?.exists && st.path && env.open(st.path));
+  return true;
+}
+
 export function propraAssist(): Extension {
-  return [autocompletion({ override: [completePropra], icons: false }), propraHover, modClick];
+  return [autocompletion({ override: [completePropra], icons: false }), propraHover, modClick, keymap.of([{ key: "F12", run: goToDefinition }])];
 }

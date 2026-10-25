@@ -52,6 +52,21 @@ export async function loadOtherLanguage(path: string): Promise<Extension> {
   }
 }
 
+/** Extensions for small embedded editors (glossary panel, inline solutions). */
+export function embeddedEditorExtensions(cfg: ParserConfig, topMatter: boolean, extra: Extension): Extension {
+  return [
+    history(),
+    drawSelection(),
+    highlightActiveLine(),
+    highlightSpecialChars(),
+    EditorView.lineWrapping,
+    keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...quickFixKeymap]),
+    EditorView.contentAttributes.of({ spellcheck: "false", autocorrect: "off", autocapitalize: "off" }),
+    propraLanguage({ topMatter, cfg }),
+    extra,
+  ];
+}
+
 export function createState(text: string, setup: FileSetup): EditorState {
   return EditorState.create({
     doc: text,

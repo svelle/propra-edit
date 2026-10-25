@@ -105,6 +105,7 @@ export const backend = {
   isCourseRoot: (dir: string) => invoke<boolean>("is_course_root", { dir }),
   checkIncludes: (context: string, queries: { macroName: string; arg: string; snippet?: string }[]) =>
     invoke<{ path: string | null; exists: boolean; treeMissing: boolean; snippetFound: boolean | null }[]>("check_includes", { context, queries }),
+  termUsages: () => invoke<{ term: string; path: string; rel: string; line: number; kind: string }[]>("term_usages"),
   listIncludeDir: (context: string, partial: string, itreeMode: boolean) =>
     invoke<{ name: string; isDir: boolean }[]>("list_include_dir", { context, partial, itreeMode }),
   ltStatus: () => invoke<LtStatus>("lt_status"),

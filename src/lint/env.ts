@@ -15,6 +15,8 @@ export interface TermRef {
   names: string[];
   line: number;
   term0: boolean;
+  /** Definition text (Markdown with macros). */
+  body: string;
 }
 
 export interface IncludeQuery {
@@ -36,6 +38,10 @@ export interface PropraEnv {
   checkIncludes(queries: IncludeQuery[]): Promise<IncludeStatus[]>;
   listDir(partial: string, itree: boolean): Promise<{ name: string; isDir: boolean }[]>;
   open(path: string, line?: number): void;
+  /** Show a glossary term in the side panel. */
+  openTerm(name: string): void;
+  /** Insert a new term into the glossary (at its alphabetical position) and show it. */
+  createTerm(name: string): void;
   silenced(): string[];
   silence(id: string): void;
 }

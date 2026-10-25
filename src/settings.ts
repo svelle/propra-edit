@@ -8,6 +8,7 @@ export interface Settings {
   activeTab: string | null;
   treeExpanded: string[];
   sidebarWidth: number;
+  rightPanelWidth: number;
   fontFamily: string;
   fontSize: number;
   softWrap: boolean;
@@ -27,6 +28,7 @@ export const DEFAULT_SETTINGS: Settings = {
   activeTab: null,
   treeExpanded: [],
   sidebarWidth: 300,
+  rightPanelWidth: 380,
   fontFamily: 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace',
   fontSize: 14,
   softWrap: true,

@@ -282,6 +282,13 @@ async fn check_includes(
     Ok(queries.iter().map(|q| course::includes::check(&cfg, &ctx, q)).collect())
 }
 
+/// All glossary term references in the course ("Wo verwendet?").
+#[tauri::command]
+async fn term_usages(state: State<'_, AppState>) -> Result<Vec<course::usages::TermUsage>, String> {
+    let cfg = course_config(&state)?;
+    tauri::async_runtime::spawn_blocking(move || course::usages::scan(&cfg)).await.map_err(|e| e.to_string())
+}
+
 /// Directory entries for path completion inside INCLUDE/PROT/SNIPPET/TREEREF.
 #[tauri::command]
 async fn list_include_dir(
@@ -368,6 +375,7 @@ pub fn run() {
             new_task_paths,
             is_course_root,
             check_includes,
+            term_usages,
             list_include_dir,
             lt_status,
             lt_restart,
