@@ -351,9 +351,11 @@ Still to do: the same measurements on macOS and Windows (the user's machines).
 - **Problems** show in the build panel (filter: all, errors only, current file; errors
   first) and as diagnostics in the editor (source „sedrila (letzter Build)“), so they also
   appear in the lint panel and with F8. They stay until the next build.
-- **Cancel** kills the process group on Unix (`process_group(0)`, `kill -TERM -- -pgid`, then
-  `-KILL` after 2 s because interactive shells ignore SIGTERM) and the tree on Windows
-  (`taskkill /T /F`). Verified: no sedrila process survives.
+- **Cancel** on Unix signals the whole process tree (collected with `pgrep -P` before
+  killing) and each process's group: an interactive zsh (macOS) runs commands with job
+  control in their own process groups, so killing only our group left sedrila running (found
+  by the macOS CI run; the test now reproduces it with `set -m`). SIGTERM, then SIGKILL after
+  2 s because interactive shells ignore SIGTERM. Windows: `taskkill /T /F`.
 - **Before building**, all unsaved tabs are saved (sedrila reads from disk).
 - **Built page:** `<out>/instructor/<part>.html` if present, else `<out>/<part>.html`, opened
   with the system's default handler for `.html`.

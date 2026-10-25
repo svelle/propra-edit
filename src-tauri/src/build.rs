@@ -103,17 +103,44 @@ fn prepare(cmdline: &str, cwd: &Path) -> Command {
     c
 }
 
+/// All descendants of `pid` (children first found via `pgrep -P`, available on macOS and Linux).
+#[cfg(unix)]
+fn descendants(pid: u32) -> Vec<u32> {
+    let mut out = Vec::new();
+    let mut todo = vec![pid];
+    while let Some(p) = todo.pop() {
+        let Ok(o) = Command::new("pgrep").args(["-P", &p.to_string()]).stderr(Stdio::null()).output() else { continue };
+        for c in String::from_utf8_lossy(&o.stdout).split_whitespace().filter_map(|x| x.parse::<u32>().ok()) {
+            if !out.contains(&c) {
+                out.push(c);
+                todo.push(c);
+            }
+        }
+    }
+    out
+}
+
 fn kill_tree(pid: u32) {
     #[cfg(unix)]
     {
-        // the child leads its own process group (process_group(0)), so this reaches sedrila too
-        // "--" so that procps kill reads the negative number as a process group, not a signal;
-        // interactive shells ignore SIGTERM, so follow up with SIGKILL
-        let group = format!("-{pid}");
-        let _ = Command::new("kill").args(["-TERM", "--", &group]).status();
+        // The child leads its own process group (process_group(0)). But an interactive zsh
+        // (macOS) enables job control and moves the commands it runs into their own groups,
+        // so every process of the tree and its group is signalled too. The tree is collected
+        // before killing, because children are re-parented once their parent dies.
+        // "--" so that procps kill reads negative numbers as groups; interactive shells
+        // ignore SIGTERM, hence SIGKILL after a grace period.
+        let mut pids = descendants(pid);
+        pids.push(pid);
+        let targets: Vec<String> = pids.iter().flat_map(|p| [p.to_string(), format!("-{p}")]).collect();
+        let signal = |sig: &str, targets: &[String]| {
+            let mut c = Command::new("kill");
+            c.arg(sig).arg("--").args(targets).stdout(Stdio::null()).stderr(Stdio::null());
+            let _ = c.status();
+        };
+        signal("-TERM", &targets);
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_secs(2));
-            let _ = Command::new("kill").args(["-KILL", "--", &group]).stderr(Stdio::null()).status();
+            signal("-KILL", &targets);
         });
     }
     #[cfg(windows)]
@@ -266,10 +293,17 @@ mod tests {
     fn cancel_kills_the_process_tree() {
         let state = Arc::new(Mutex::new(BuildState::default()));
         let (tx, rx) = mpsc::channel();
-        start(state.clone(), "sleep 30 & sleep 30; wait".into(), std::env::temp_dir(), Arc::new(|_| {}), Arc::new(move |d| tx.send(d).unwrap())).unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(300));
+        // "set -m" = job control, as in an interactive zsh on macOS: jobs get their own groups
+        let secs = 1000 + std::process::id() % 1000; // unique, so pgrep finds only our processes
+        start(state.clone(), format!("set -m; sleep {secs} & sleep {secs}; wait"), std::env::temp_dir(), Arc::new(|_| {}), Arc::new(move |d| tx.send(d).unwrap())).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(500));
         assert!(cancel(&state));
         let done = rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
         assert!(done.cancelled);
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let left = Command::new("pgrep").args(["-f", &format!("sleep {secs}")]).output().unwrap();
+        let ids = String::from_utf8_lossy(&left.stdout).to_string();
+        let ps = Command::new("ps").args(["-o", "pid,pgid,stat,args", "-p", &ids.split_whitespace().collect::<Vec<_>>().join(",")]).output().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
+        assert!(ids.trim().is_empty(), "processes survived:\n{ps}");
     }
 }
