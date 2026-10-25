@@ -1,0 +1,16 @@
+[32m/tmp/out/[0m[32mencoding.zip[0m
+[32m/tmp/out/[0m[32mm_glob.zip[0m
+[31mFile [0m[31m'ch/Werkzeuge/Git/git-Branches.md'[0m[31m:[0m
+[31m   [0m[1;31m[[0m[31mINCLUDE::gibtsnicht.md[0m[1;31m][0m
+[31m   file [0m[31m'ch/Werkzeuge/Git/gibtsnicht.md'[0m[31m does not exist[0m
+[31mFile [0m[31m'ch/Werkzeuge/Git/git-Branches.md'[0m[31m:[0m
+[31m   [0m[1;31m[[0m[31mUNBEKANNT::x[0m[1;31m][0m
+[31m   Macro [0m[31m'UNBEKANNT'[0m[31m is not defined[0m
+[31mFile [0m[31m'ch/Werkzeuge/Git/git-Branches.md'[0m[31m:[0m
+[31m   part [0m[31m'Nirgends'[0m[31m does not exist[0m
+[33mFile [0m[33m'ch/Basis/Repo/Kommandoprotokolle.md'[0m[33m:[0m
+[33m   [0m[1;33m[[0m[33mPROT::ALT:Kommandoprotokolle.prot[0m[1;33m][0m[33m: file [0m[33m'altdir/ch/Basis/Repo/Kommandoprotokolle.prot'[0m[33m not found[0m
+[31mFile [0m[31m'ch/Werkzeuge/Git/git-Repository.md'[0m[31m:[0m
+[31m   [0m[1;31m[[0m[31mTERMREF::Submodules[0m[1;31m][0m[31m references undefined glossary term [0m[31m'Submodules'[0m[31m [0m[1;31m([0m[31mfile [0m[31m'ch/Werkzeuge/Git/git-Repository.md'[0m[31m in part [0m[31m'git-Repository'[0m[1;31m)[0m
+bash: no job control in this shell
+[1;31m==== [0m[1;31m51[0m[1;31m errors. [0m[1;31m26.9[0m[1;31m seconds. Exiting. ====[0m

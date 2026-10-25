@@ -2,6 +2,7 @@
 
 import { Facet } from "@codemirror/state";
 import type { FileKind, IncludeStatus } from "./structural";
+import type { BuildProblem } from "../build/output";
 
 export interface PartRef {
   name: string;
@@ -42,6 +43,8 @@ export interface PropraEnv {
   openTerm(name: string): void;
   /** Insert a new term into the glossary (at its alphabetical position) and show it. */
   createTerm(name: string): void;
+  /** Problems sedrila reported for this file in the last build. */
+  buildProblems(): BuildProblem[];
   silenced(): string[];
   silence(id: string): void;
 }

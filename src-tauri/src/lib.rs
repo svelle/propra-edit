@@ -1,6 +1,7 @@
 //! Rust core: owns the file system access, the course index and the file watcher,
 //! and exposes them to the frontend as Tauri commands and events.
 
+pub mod build;
 pub mod course;
 pub mod fs;
 pub mod lt;
@@ -25,6 +26,7 @@ struct OpenCourse {
 struct AppState {
     course: Arc<Mutex<Option<OpenCourse>>>,
     lt: Mutex<Option<lt::LanguageTool>>,
+    build: Arc<Mutex<build::BuildState>>,
 }
 
 fn lt_handle(state: &AppState) -> Result<lt::LanguageTool, String> {
@@ -297,6 +299,84 @@ async fn course_css(state: State<'_, AppState>) -> Result<String, String> {
     Ok(css)
 }
 
+/// Absolute path for a `/`-separated path relative to the course root (from sedrila output).
+#[tauri::command]
+fn course_path(state: State<'_, AppState>, rel: String) -> Result<String, String> {
+    Ok(course::config::join_rel(&course_root(&state)?, &rel).to_string_lossy().into_owned())
+}
+
+fn course_root(state: &AppState) -> Result<PathBuf, String> {
+    Ok(course_config(state)?.root)
+}
+
+/// Output directory for builds: the setting, or `<app cache dir>/build`.
+fn build_outdir(app: &AppHandle, setting: &str) -> Result<PathBuf, String> {
+    if !setting.trim().is_empty() {
+        return Ok(PathBuf::from(setting.trim()));
+    }
+    Ok(app.path().app_cache_dir().map_err(|e| e.to_string())?.join("build"))
+}
+
+#[tauri::command]
+fn build_default_outdir(app: AppHandle) -> Result<String, String> {
+    Ok(build_outdir(&app, "")?.to_string_lossy().into_owned())
+}
+
+/// Start a sedrila build from the course root; output arrives as `build-line` events,
+/// completion as `build-done`. Returns the build id and the command line actually run.
+#[tauri::command]
+async fn build_start(app: AppHandle, state: State<'_, AppState>, command: String, outdir: String) -> Result<(u64, String), String> {
+    let root = course_root(&state)?;
+    let out = build_outdir(&app, &outdir)?;
+    // builds into the same directory are incremental (about 3x faster for propra-inf)
+    std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    let cmdline = build::expand_command(&command, &out);
+    let a1 = app.clone();
+    let a2 = app.clone();
+    let id = build::start(
+        state.build.clone(),
+        cmdline.clone(),
+        root,
+        Arc::new(move |l| {
+            let _ = a1.emit("build-line", l);
+        }),
+        Arc::new(move |d| {
+            let _ = a2.emit("build-done", d);
+        }),
+    )?;
+    Ok((id, cmdline))
+}
+
+#[tauri::command]
+fn build_cancel(state: State<'_, AppState>) -> bool {
+    build::cancel(&state.build)
+}
+
+/// Run `sedrila --version` the way builds run (for the settings dialog).
+#[tauri::command]
+async fn sedrila_test(state: State<'_, AppState>, command: String) -> Result<String, String> {
+    let root = course_root(&state).unwrap_or_else(|_| std::env::temp_dir());
+    let first = if command.trim().is_empty() { build::DEFAULT_COMMAND } else { command.trim() };
+    // "uv run sedrila author build …" -> "uv run sedrila --version"
+    let prog = match first.find("author") {
+        Some(i) => first[..i].trim_end().to_string(),
+        None => "sedrila".to_string(),
+    };
+    tauri::async_runtime::spawn_blocking(move || build::run_once(&format!("{prog} --version"), &root))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Open the built page of a part in the system browser (instructor version if present).
+#[tauri::command]
+fn open_built_page(app: AppHandle, outdir: String, name: String) -> Result<String, String> {
+    let out = build_outdir(&app, &outdir)?;
+    let candidates = [out.join("instructor").join(format!("{name}.html")), out.join(format!("{name}.html"))];
+    let page = candidates.iter().find(|p| p.exists()).ok_or_else(|| format!("Keine gebaute Seite für „{name}“ in {}", out.display()))?;
+    tauri_plugin_opener::open_path(page, None::<&str>).map_err(|e| format!("Browser konnte nicht gestartet werden: {e}"))?;
+    Ok(page.to_string_lossy().into_owned())
+}
+
 /// All glossary term references in the course ("Wo verwendet?").
 #[tauri::command]
 async fn term_usages(state: State<'_, AppState>) -> Result<Vec<course::usages::TermUsage>, String> {
@@ -392,6 +472,12 @@ pub fn run() {
             check_includes,
             term_usages,
             course_css,
+            build_default_outdir,
+            course_path,
+            build_start,
+            build_cancel,
+            sedrila_test,
+            open_built_page,
             list_include_dir,
             lt_status,
             lt_restart,

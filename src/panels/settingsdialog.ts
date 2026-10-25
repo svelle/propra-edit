@@ -1,4 +1,4 @@
-// Settings dialog: course root, editor font and soft wrap.
+// Settings dialog: course root, editor font, soft wrap, grammar rules, sedrila build.
 
 import { de } from "../i18n/de";
 import type { Settings } from "../settings";
@@ -6,10 +6,15 @@ import { h, showDialog } from "../ui/dom";
 
 export interface SettingsResult {
   changeCourse: boolean;
-  values: Pick<Settings, "fontFamily" | "fontSize" | "softWrap" | "grammarEnabled" | "ltDisabledRules" | "ltEnabledRules">;
+  values: Pick<Settings, "fontFamily" | "fontSize" | "softWrap" | "grammarEnabled" | "ltDisabledRules" | "ltEnabledRules" | "buildCommand" | "buildOutDir">;
 }
 
-export async function settingsDialog(s: Settings): Promise<SettingsResult | null> {
+export interface SettingsDialogDeps {
+  defaultOutDir(): Promise<string>;
+  testSedrila(command: string): Promise<string>;
+}
+
+export async function settingsDialog(s: Settings, deps: SettingsDialogDeps): Promise<SettingsResult | null> {
   const font = h("input", { type: "text", value: s.fontFamily, spellcheck: "false" });
   const size = h("input", { type: "number", min: 8, max: 40, value: s.fontSize });
   const wrap = h("input", { type: "checkbox" });
@@ -18,6 +23,22 @@ export async function settingsDialog(s: Settings): Promise<SettingsResult | null
   grammar.checked = s.grammarEnabled;
   const disabled = h("input", { type: "text", value: s.ltDisabledRules.join(", "), spellcheck: "false" });
   const enabled = h("input", { type: "text", value: s.ltEnabledRules.join(", "), spellcheck: "false" });
+  const buildCmd = h("input", { type: "text", value: s.buildCommand, placeholder: de.settings.buildCommandDefault, spellcheck: "false" });
+  const outDir = h("input", { type: "text", value: s.buildOutDir, spellcheck: "false" });
+  void deps.defaultOutDir().then((d) => (outDir.placeholder = d), () => {});
+  const testResult = h("div", { class: "form-hint" });
+  const testBtn = h("button", { type: "button" }, de.settings.testSedrila);
+  testBtn.addEventListener("click", () => {
+    testResult.textContent = de.settings.testing;
+    testResult.classList.remove("form-error");
+    deps.testSedrila(buildCmd.value).then(
+      (out) => (testResult.textContent = de.settings.testOk(out.trim().split("\n").pop() ?? "")),
+      (e) => {
+        testResult.textContent = String(e);
+        testResult.classList.add("form-error");
+      },
+    );
+  });
   const body = h(
     "div",
     { class: "form" },
@@ -29,6 +50,11 @@ export async function settingsDialog(s: Settings): Promise<SettingsResult | null
     h("label", {}, de.settings.disabledRules, disabled),
     h("label", {}, de.settings.enabledRules, enabled),
     h("div", { class: "form-hint" }, de.settings.rulesHint),
+    h("label", {}, de.settings.buildCommand, buildCmd),
+    h("div", { class: "form-hint" }, de.settings.buildCommandHint),
+    h("label", {}, de.settings.buildOutDir, outDir),
+    h("div", { class: "form-row" }, testBtn),
+    testResult,
   );
   const choice = await showDialog<"ok" | "cancel" | "course">({
     title: de.settings.title,
@@ -51,6 +77,8 @@ export async function settingsDialog(s: Settings): Promise<SettingsResult | null
       grammarEnabled: grammar.checked,
       ltDisabledRules: splitList(disabled.value),
       ltEnabledRules: splitList(enabled.value),
+      buildCommand: buildCmd.value.trim(),
+      buildOutDir: outDir.value.trim(),
     },
   };
 }

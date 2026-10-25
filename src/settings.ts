@@ -26,6 +26,11 @@ export interface Settings {
   /** Optional overrides for development: path to java and to the LanguageTool jar directory. */
   ltJava: string;
   ltLibDir: string;
+  /** sedrila build command ({outdir} is replaced); empty = default. */
+  buildCommand: string;
+  /** Build output directory; empty = app cache directory. */
+  buildOutDir: string;
+  buildPanelHeight: number;
   /** Lint ids silenced per file (key: file path relative to the course root). */
   silencedLints: Record<string, string[]>;
 }
@@ -50,6 +55,9 @@ export const DEFAULT_SETTINGS: Settings = {
   ltEnabledRules: [],
   ltJava: "",
   ltLibDir: "",
+  buildCommand: "",
+  buildOutDir: "",
+  buildPanelHeight: 260,
   silencedLints: {},
 };
 

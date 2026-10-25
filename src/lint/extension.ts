@@ -8,6 +8,7 @@ import { lintRefresh } from "../editor/refresh";
 import { de } from "../i18n/de";
 import { propraEnv } from "./env";
 import { includeKey, structuralLints, type IncludeStatus } from "./structural";
+import { locateProblem, problemMessage } from "../build/output";
 
 export function structuralLinter(): Extension {
   return linter(
@@ -37,7 +38,14 @@ export function structuralLinter(): Extension {
         glossaryNames: glossary ? new Set(glossary.keys()) : null,
         includes,
       });
-      return findings
+      const text = view.state.doc.toString();
+      const fromBuild: Diagnostic[] = env.buildProblems().map((p) => {
+        const loc = locateProblem(text, p);
+        const from = loc?.from ?? 0;
+        const to = loc?.to ?? view.state.doc.line(1).to;
+        return { from, to: Math.max(to, from + 1), severity: p.severity, message: problemMessage(p), source: de.lint.sedrilaSource, markClass: "cm-pm-lint" };
+      });
+      return fromBuild.concat(findings
         .filter((f) => !silenced.has(f.id))
         .map((f) => ({
           from: f.from,
@@ -52,7 +60,7 @@ export function structuralLinter(): Extension {
               : []),
             { name: de.lint.silence, apply: () => env.silence(f.id) },
           ],
-        }));
+        })));
     },
     { delay: 300, needsRefresh: (u) => u.transactions.some((tr) => tr.effects.some((e) => e.is(lintRefresh))) },
   );

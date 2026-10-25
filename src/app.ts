@@ -15,6 +15,8 @@ import { syncAnnotation } from "./editor/slice";
 import { glossaryTerms, termInsertion } from "./glossary/model";
 import { GlossaryPanel, type TermUsage } from "./panels/glossary-panel";
 import { PreviewPanel } from "./panels/preview";
+import { BuildPanel } from "./panels/build-panel";
+import { locateProblem, type BuildProblem } from "./build/output";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { altdirField, altdirLoad, altdirStateExtension, type AltdirDoc, type RenumberPlan } from "./altdir/state";
 import { altdirViewExtension, setSolutionsVisible, type AltdirEnv } from "./altdir/widgets";
@@ -91,6 +93,10 @@ export class App {
   private ltStatus: LtStatus = { state: "starting", message: null };
   private glossaryPanel!: GlossaryPanel;
   private preview!: PreviewPanel;
+  private buildPanel!: BuildPanel;
+  private buildId = 0;
+  private scrollToken = 0;
+  private buildProblems = new Map<string, BuildProblem[]>();
   private diskTextCache = new Map<string, string | null>();
   private glossaryDiskText: string | null = null;
   private glossaryTimer: number | undefined;
@@ -198,6 +204,43 @@ export class App {
       },
     });
     this.view.scrollDOM.addEventListener("scroll", () => this.syncPreview(), { passive: true });
+    this.buildPanel = new BuildPanel({
+      start: async () => {
+        if (!this.index) throw new Error(de.build.noCourse);
+        await this.saveAllBeforeBuild();
+        this.buildId = -1; // accept output that arrives before the id is known
+        const [id, cmd] = await backend.buildStart(this.settings.buildCommand, this.settings.buildOutDir);
+        this.buildId = id;
+        return cmd;
+      },
+      cancel: () => void backend.buildCancel(),
+      canOpenPage: () => !!this.activePartName(),
+      openPage: () => {
+        const name = this.activePartName();
+        if (!name) return toast(de.build.noPart, "error");
+        backend.openBuiltPage(this.settings.buildOutDir, name).then(
+          (p) => toast(de.build.pageOpened(p)),
+          (e) => toast(String(e), "error"),
+        );
+      },
+      openProblem: (p) => void this.openBuildProblem(p),
+      activeRel: () => (this.active ? this.relOf(this.active.path) : null),
+      problemsChanged: (summary) => {
+        this.buildProblems = new Map();
+        for (const p of summary.problems) {
+          const list = this.buildProblems.get(p.file) ?? [];
+          list.push(p);
+          this.buildProblems.set(p.file, list);
+        }
+        this.refreshLints();
+      },
+      closed: () => this.view.focus(),
+      height: this.settings.buildPanelHeight,
+      setHeight: (px) => {
+        this.settings.buildPanelHeight = px;
+        saveSettings(this.settings);
+      },
+    });
     this.buildLayout(root);
     this.bindGlobalKeys();
     await this.bindBackendEvents();
@@ -227,6 +270,7 @@ export class App {
       btn(de.glossary.toolbar, de.glossary.toolbarTitle, () => void this.toggleGlossary()),
       btn(de.altdir.toolbar, de.altdir.toolbarTitle, () => this.toggleSolutions()),
       btn(de.preview.toolbar, de.preview.toolbarTitle(`${modKey()}+Shift+V`), () => this.togglePreview()),
+      btn(de.build.toolbar, de.build.toolbarTitle(`${modKey()}+B`), () => void this.buildPanel.run()),
       h("span", { class: "spacer" }),
       btn("⚙", de.toolbar.settings, () => void this.openSettings()),
     );
@@ -246,7 +290,7 @@ export class App {
       resizer.addEventListener("pointermove", move);
       resizer.addEventListener("pointerup", up, { once: true });
     });
-    const main = h("main", { class: "main" }, this.tabBar, this.editorHost, this.welcome);
+    const main = h("main", { class: "main" }, this.tabBar, this.editorHost, this.welcome, this.buildPanel.dom);
     this.statusProblems.addEventListener("click", () => {
       openLintPanel(this.view);
       this.view.focus();
@@ -579,6 +623,7 @@ export class App {
       glossary: () => this.glossaryMap,
       glossaryPath: () => this.index?.glossary?.path ?? null,
       checkIncludes: (queries: IncludeQuery[]) => this.checkIncludesCached(path, queries),
+      buildProblems: () => this.buildProblems.get(rel()) ?? [],
       listDir: (partial, itree) => backend.listIncludeDir(path, partial, itree),
       open: (p, line) => void this.openAt(p, line),
       openTerm: (name) => void this.openTerm(name),
@@ -617,6 +662,41 @@ export class App {
     return this.diskTextCache.get(path) ?? null;
   }
 
+  private relOf(path: string): string | null {
+    return this.index ? (openableItems(this.index).find((i) => i.path === path)?.rel ?? null) : null;
+  }
+
+  /** Name of the active part (task, taskgroup, chapter), for opening its built page. */
+  private activePartName(): string | null {
+    if (!this.active || !this.index) return null;
+    const part = findPartByPath(this.index, this.active.path);
+    return part && part.kind !== "zipdir" ? part.name : this.index.glossary?.path === this.active.path ? "glossary" : null;
+  }
+
+  private async saveAllBeforeBuild() {
+    for (const tab of [...this.tabs]) {
+      if (tab === this.active) tab.state = this.view.state;
+      if (this.isDirty(tab)) await this.saveTab(tab);
+    }
+  }
+
+  private async openBuildProblem(p: BuildProblem) {
+    let path: string;
+    try {
+      path = await backend.coursePath(p.file);
+    } catch (e) {
+      return toast(String(e), "error");
+    }
+    if (!(await backend.pathExists(path).catch(() => false))) return toast(de.build.notInCourse(p.file), "error");
+    const tab = await this.openFile(path);
+    if (!tab || tab !== this.active) return;
+    const loc = locateProblem(this.view.state.doc.toString(), p);
+    const pos = loc?.from ?? 0;
+    this.scrollToken++;
+    this.view.dispatch({ selection: loc ? EditorSelection.range(loc.from, loc.to) : EditorSelection.cursor(0), effects: EditorView.scrollIntoView(pos, { y: "center" }) });
+    this.view.focus();
+  }
+
   private togglePreview() {
     if (this.preview.visible) this.preview.hide();
     else {
@@ -644,6 +724,7 @@ export class App {
     const tab = await this.openFile(path);
     if (!tab || line === undefined || tab !== this.active) return;
     const l = this.view.state.doc.line(Math.min(line + 1, this.view.state.doc.lines));
+    this.scrollToken++;
     this.view.dispatch({ selection: EditorSelection.cursor(l.from), effects: EditorView.scrollIntoView(l.from, { y: "start", yMargin: 60 }) });
     this.view.focus();
   }
@@ -651,7 +732,7 @@ export class App {
   async openFile(path: string, opts: { activate?: boolean; quiet?: boolean } = {}) {
     const existing = this.tabs.find((t) => t.path === path);
     if (existing) {
-      if (opts.activate !== false) this.activate(existing);
+      if (opts.activate !== false && existing !== this.active) this.activate(existing);
       return existing;
     }
     let file: TextFile;
@@ -717,11 +798,14 @@ export class App {
       tab.wrap = this.settings.softWrap;
     }
     this.view.setState(tab.state);
+    const token = ++this.scrollToken;
     requestAnimationFrame(() => {
-      this.view.scrollDOM.scrollTop = tab.scrollTop;
+      // skipped if a jump to a position (openAt, problem click) happened in the meantime
+      if (token === this.scrollToken) this.view.scrollDOM.scrollTop = tab.scrollTop;
       this.syncPreview();
     });
     this.preview.update(0);
+    this.buildPanel.activeChanged();
     this.updateMainVisibility();
     this.renderTabs();
     this.updateStatus();
@@ -874,6 +958,12 @@ export class App {
       await events.onFileChanged((paths) => void this.onFilesChanged(paths));
       await events.onIndexChanged((index) => this.setIndex(index));
       await events.onIndexError((msg) => toast(msg, "error"));
+      await events.onBuildLine((l) => {
+        if (l.id === this.buildId || this.buildId === -1) this.buildPanel.line(l.line);
+      });
+      await events.onBuildDone((d) => {
+        if (d.id === this.buildId || this.buildId === -1) this.buildPanel.finish(d);
+      });
       await events.onLtStatus((st) => {
         this.ltStatus = st;
         this.updateLtStatus();
@@ -1037,7 +1127,7 @@ export class App {
   }
 
   private async openSettings() {
-    const result = await settingsDialog(this.settings);
+    const result = await settingsDialog(this.settings, { defaultOutDir: () => backend.buildDefaultOutdir(), testSedrila: (cmd) => backend.sedrilaTest(cmd) });
     if (!result) return;
     if (result.changeCourse) return void this.chooseCourse();
     Object.assign(this.settings, result.values);
@@ -1062,6 +1152,7 @@ export class App {
         else if (key === "n" && !e.shiftKey) void this.newTask();
         else if (key === "l" && e.shiftKey) this.toggleSolutions();
         else if (key === "v" && e.shiftKey) this.togglePreview();
+        else if (key === "b" && !e.shiftKey) void this.buildPanel.run();
         else if (e.key === "Tab" && e.ctrlKey && this.tabs.length > 1 && this.active) {
           const i = this.tabs.indexOf(this.active);
           this.activate(this.tabs[(i + (e.shiftKey ? -1 : 1) + this.tabs.length) % this.tabs.length]);

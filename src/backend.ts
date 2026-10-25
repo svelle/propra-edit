@@ -63,6 +63,14 @@ export interface CourseConfig {
   baseresourcedir: string | null;
 }
 
+export interface BuildDone {
+  id: number;
+  code: number | null;
+  elapsedMs: number;
+  cancelled: boolean;
+  error: string | null;
+}
+
 export interface CourseIndex {
   config: CourseConfig;
   chapters: ChapterNode[];
@@ -116,6 +124,12 @@ export const backend = {
   ltCheck: (data: string, disabledRules: string[], enabledRules: string[]) =>
     invoke<string>("lt_check", { data, language: "de-DE", disabledRules, enabledRules }),
   courseCss: () => invoke<string>("course_css"),
+  coursePath: (rel: string) => invoke<string>("course_path", { rel }),
+  buildDefaultOutdir: () => invoke<string>("build_default_outdir"),
+  buildStart: (command: string, outdir: string) => invoke<[number, string]>("build_start", { command, outdir }),
+  buildCancel: () => invoke<boolean>("build_cancel"),
+  sedrilaTest: (command: string) => invoke<string>("sedrila_test", { command }),
+  openBuiltPage: (outdir: string, name: string) => invoke<string>("open_built_page", { outdir, name }),
   getDictionary: () => invoke<string[]>("get_dictionary"),
   saveDictionary: (words: string[]) => invoke<void>("save_dictionary", { words }),
 };
@@ -125,5 +139,7 @@ export const events = {
   onIndexChanged: (cb: (index: CourseIndex) => void): Promise<UnlistenFn> =>
     listen<CourseIndex>("index-changed", (e) => cb(e.payload)),
   onLtStatus: (cb: (s: LtStatus) => void): Promise<UnlistenFn> => listen<LtStatus>("lt-status", (e) => cb(e.payload)),
+  onBuildLine: (cb: (l: { id: number; line: string }) => void): Promise<UnlistenFn> => listen<{ id: number; line: string }>("build-line", (e) => cb(e.payload)),
+  onBuildDone: (cb: (d: BuildDone) => void): Promise<UnlistenFn> => listen<BuildDone>("build-done", (e) => cb(e.payload)),
   onIndexError: (cb: (msg: string) => void): Promise<UnlistenFn> => listen<string>("index-error", (e) => cb(e.payload)),
 };

@@ -327,3 +327,38 @@ Still to do: the same measurements on macOS and Windows (the user's machines).
   pollution); KaTeX is pinned to the patched 0.18.11 (2026-10-01) via `overrides` in
   package.json, although mermaid declares `^0.16.47`.
 - Shortcut Cmd/Ctrl+Shift+V (as in VS Code's Markdown preview); F8 stays „Nächstes Problem“.
+
+## Phase 7: sedrila build
+
+- **Running:** the command (default `sedrila author build --include-stage draft {outdir}`,
+  `{outdir}` replaced by the quoted output directory or appended) runs from the course root
+  through the user's shell: `$SHELL -l -i -c` on macOS/Linux, `cmd /C` on Windows. `-i` is
+  needed because propra-inf's `sedrila.yaml` uses `$SEDRILA_*` variables, which usually live
+  in `.zshrc`/`.bashrc`, not in the login profile. bash prints two "no job control" lines
+  without a terminal; the panel drops them. stdin is closed. Environment: `FORCE_COLOR=1`,
+  `PYTHONUNBUFFERED=1`, `PYTHONIOENCODING=utf-8` and `COLUMNS=2000` (rich wraps at
+  `COLUMNS`; with the planned 200, long messages would be split across lines).
+- **Output directory:** default `<app cache dir>/build`, kept between builds. Building into
+  the same directory is incremental (propra-inf: 30 s first build, 11 s afterwards) and still
+  reports the errors of unchanged files.
+- **Output format** (checked with sedrila 3.2.0 on propra-inf with injected errors):
+  `File '<path relative to course root>':` in red (error) or yellow (warning), followed by
+  lines indented by three spaces, often first the offending macro call, then the message;
+  last line `==== N errors. S seconds. Exiting. ====`. The exit code is 0 even with errors.
+  Messages have no line numbers: the editor searches for the macro call, else for a quoted
+  name from the message (`part 'Nirgends' does not exist` finds `[PARTREF::Nirgends]`), else
+  line 1.
+- **Problems** show in the build panel (filter: all, errors only, current file; errors
+  first) and as diagnostics in the editor (source „sedrila (letzter Build)“), so they also
+  appear in the lint panel and with F8. They stay until the next build.
+- **Cancel** kills the process group on Unix (`process_group(0)`, `kill -TERM -- -pgid`, then
+  `-KILL` after 2 s because interactive shells ignore SIGTERM) and the tree on Windows
+  (`taskkill /T /F`). Verified: no sedrila process survives.
+- **Before building**, all unsaved tabs are saved (sedrila reads from disk).
+- **Built page:** `<out>/instructor/<part>.html` if present, else `<out>/<part>.html`, opened
+  with the system's default handler for `.html`.
+- **„sedrila testen“** in the settings runs the configured command's program part with
+  `--version` (e.g. `uv run sedrila --version`) the same way as builds.
+- Not done: Windows end-to-end test (CI only compiles it), ANSI cursor movement (progress
+  bars; sedrila prints none in author builds).
+
