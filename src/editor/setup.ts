@@ -18,9 +18,13 @@ import { bracketMatching, foldGutter, foldKeymap, indentOnInput, LanguageDescrip
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
 import { languages } from "@codemirror/language-data";
 import { propraLanguage } from "./propra-language";
+import { sectionHeader } from "./section-header";
 import { lintKeymap } from "@codemirror/lint";
 import { quickFixKeymap } from "./quickfix";
 import type { ParserConfig } from "./parser";
+import { de } from "../i18n/de";
+
+const germanPhrases = EditorState.phrases.of(de.codemirror);
 
 export const wrapCompartment = new Compartment();
 export const languageCompartment = new Compartment();
@@ -60,6 +64,7 @@ export function embeddedEditorExtensions(cfg: ParserConfig, topMatter: boolean, 
     highlightActiveLine(),
     highlightSpecialChars(),
     EditorView.lineWrapping,
+    germanPhrases,
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...quickFixKeymap]),
     EditorView.contentAttributes.of({ spellcheck: "false", autocorrect: "off", autocapitalize: "off" }),
     propraLanguage({ topMatter, cfg }),
@@ -71,6 +76,7 @@ export function createState(text: string, setup: FileSetup): EditorState {
   return EditorState.create({
     doc: text,
     extensions: [
+      germanPhrases,
       lineNumbers(),
       highlightActiveLineGutter(),
       highlightSpecialChars(),
@@ -90,7 +96,7 @@ export function createState(text: string, setup: FileSetup): EditorState {
       EditorView.contentAttributes.of({ spellcheck: "false", autocorrect: "off", autocapitalize: "off" }),
       wrapCompartment.of(setup.softWrap ? EditorView.lineWrapping : []),
       languageCompartment.of(setup.isMarkdown ? propraLanguage({ topMatter: setup.topMatter, cfg: setup.parserConfig }) : []),
-      setup.isMarkdown ? setup.markdownExtra : [],
+      setup.isMarkdown ? [setup.markdownExtra, sectionHeader()] : [],
       keymap.of([...quickFixKeymap, ...lintKeymap]),
       setup.extra,
     ],

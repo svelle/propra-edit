@@ -38,7 +38,7 @@ import { FileTree } from "./panels/filetree";
 import { newTaskDialog } from "./panels/newtask";
 import { quickOpen } from "./panels/quickopen";
 import { settingsDialog } from "./panels/settingsdialog";
-import { loadSettings, saveSettings, type Settings } from "./settings";
+import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from "./settings";
 import { h, showDialog, toast } from "./ui/dom";
 
 interface Tab {
@@ -86,7 +86,9 @@ export class App {
   private tabBar = h("div", { class: "tabbar", role: "tablist" });
   private editorHost = h("div", { class: "editor-host" });
   private welcome = h("div", { class: "welcome" });
-  private statusLeft = h("span", { class: "status-left" });
+  private statusPath = h("bdi", { class: "status-path-inner" });
+  private statusFile = h("span", { class: "status-file" });
+  private statusLeft = h("span", { class: "status-left" }, h("span", { class: "status-path" }, this.statusPath), this.statusFile);
   private statusPos = h("span", { class: "status-pos" });
   private statusRight = h("span", { class: "status-right" });
   private statusLt = h("button", { class: "status-lt", title: de.logs.statusHint });
@@ -101,6 +103,8 @@ export class App {
   private buildPanel!: BuildPanel;
   private gitPanel!: GitPanel;
   private gitTimer: number | undefined;
+  private toolbarSync: (() => void)[] = [];
+  private saveBtn!: HTMLButtonElement;
   private statusGit = h("button", { class: "status-git", hidden: true });
   private buildId = 0;
   private scrollToken = 0;
@@ -279,18 +283,33 @@ export class App {
 
   private buildLayout(root: HTMLElement) {
     const btn = (label: string, title: string, onclick: () => void) => h("button", { class: "tool", title, onclick }, label);
+    // toggles show their state (aria-pressed); panels report hide/show via their `hidden` attribute
+    const toggle = (label: string, title: string, onclick: () => void, isOn: () => boolean, watch?: HTMLElement) => {
+      const b = btn(label, title, onclick);
+      b.classList.add("toggle");
+      const sync = () => b.setAttribute("aria-pressed", String(isOn()));
+      this.toolbarSync.push(sync);
+      if (watch) new MutationObserver(sync).observe(watch, { attributes: true, attributeFilter: ["hidden"] });
+      sync();
+      return b;
+    };
+    const sep = () => h("span", { class: "tool-sep", "aria-hidden": "true" });
+    this.saveBtn = btn(de.toolbar.save, `${de.toolbar.save} (${modKey()}+S)`, () => void this.saveActive());
     const toolbar = h(
       "header",
       { class: "toolbar" },
       btn(de.toolbar.openCourse, de.toolbar.openCourse, () => void this.chooseCourse()),
       btn(de.toolbar.newTask, `${de.toolbar.newTask} (${modKey()}+N)`, () => void this.newTask()),
-      btn(de.toolbar.save, `${de.toolbar.save} (${modKey()}+S)`, () => void this.saveActive()),
+      this.saveBtn,
+      sep(),
       btn(de.toolbar.quickOpen, `${de.toolbar.quickOpen} (${modKey()}+P)`, () => this.quickOpen()),
-      btn(de.glossary.toolbar, de.glossary.toolbarTitle, () => void this.toggleGlossary()),
-      btn(de.altdir.toolbar, de.altdir.toolbarTitle, () => this.toggleSolutions()),
-      btn(de.preview.toolbar, de.preview.toolbarTitle(`${modKey()}+Shift+V`), () => this.togglePreview()),
+      sep(),
+      toggle(de.glossary.toolbar, de.glossary.toolbarTitle, () => void this.toggleGlossary(), () => !this.glossaryPanel.dom.hidden, this.glossaryPanel.dom),
+      toggle(de.altdir.toolbar, de.altdir.toolbarTitle, () => this.toggleSolutions(), () => this.settings.showSolutions),
+      toggle(de.preview.toolbar, de.preview.toolbarTitle(`${modKey()}+Shift+V`), () => this.togglePreview(), () => !this.preview.dom.hidden, this.preview.dom),
+      toggle(de.git.toolbar, de.git.toolbarTitle(`${modKey()}+Shift+G`), () => this.toggleGit(), () => !this.gitPanel.dom.hidden, this.gitPanel.dom),
+      sep(),
       btn(de.build.toolbar, de.build.toolbarTitle(`${modKey()}+B`), () => void this.buildPanel.run()),
-      btn(de.git.toolbar, de.git.toolbarTitle(`${modKey()}+Shift+G`), () => this.toggleGit()),
       h("span", { class: "spacer" }),
       btn(de.logs.toolbar, de.logs.toolbarTitle, () => void this.showLogs("app")),
       btn("⚙", de.toolbar.settings, () => void this.openSettings()),
@@ -381,9 +400,24 @@ export class App {
     root.replaceChildren(toolbar, h("div", { class: "workspace" }, sidebar, resizer, main, pvResizer, pv, rightResizer, panel, gpResizer, gp), status);
   }
 
+  private lineWrap() {
+    return this.settings.wrapMode !== "off";
+  }
+
   private applyFontSettings() {
-    document.documentElement.style.setProperty("--editor-font", this.settings.fontFamily);
-    document.documentElement.style.setProperty("--editor-font-size", `${this.settings.fontSize}px`);
+    const s = this.settings;
+    const root = document.documentElement;
+    root.style.setProperty("--editor-font", s.fontFamily);
+    root.style.setProperty("--editor-font-size", `${s.fontSize}px`);
+    root.style.setProperty("--prose-font", s.proseFontFamily || DEFAULT_SETTINGS.proseFontFamily);
+    root.classList.toggle("prose-proportional", s.proportionalProse);
+    root.classList.toggle("wrap-column", s.wrapMode === "column");
+    const measure = () => {
+      const font = s.proportionalProse ? s.proseFontFamily || DEFAULT_SETTINGS.proseFontFamily : s.fontFamily;
+      root.style.setProperty("--wrap-width", `${Math.round(wrapWidth(font, s.fontSize, s.wrapColumn))}px`);
+    };
+    measure();
+    void document.fonts?.ready.then(measure);
   }
 
   private showWelcome(message?: string) {
@@ -589,7 +623,7 @@ export class App {
       isMarkdown,
       topMatter: isMarkdown && hasTopMatter(this.index, tab.path, text),
       parserConfig: parserConfigFor(this.index),
-      softWrap: this.settings.softWrap,
+      softWrap: this.lineWrap(),
       extra: EditorView.updateListener.of((u: ViewUpdate) => this.onEditorUpdate(u)),
       markdownExtra: [propraEnv.of(this.makeEnv(tab.path)), structuralLinter(), propraAssist(), this.grammar.extension(), altExt],
     });
@@ -642,6 +676,7 @@ export class App {
     this.settings.showSolutions = !this.settings.showSolutions;
     saveSettings(this.settings);
     if (this.active?.alt) this.view.dispatch({ effects: setSolutionsVisible.of(this.settings.showSolutions) });
+    this.toolbarSync.forEach((f) => f());
   }
 
   private fileKind(path: string): FileKind {
@@ -860,7 +895,7 @@ export class App {
       bom: file.bom,
       scrollTop: 0,
       deleted: false,
-      wrap: this.settings.softWrap,
+      wrap: this.lineWrap(),
     };
     tab.savedDoc = tab.state.doc;
     if (file.mixedEol && !opts.quiet) toast(de.file.mixedEol(tab.name));
@@ -885,9 +920,9 @@ export class App {
     }
     this.active = tab;
     if (tab.alt) tab.state = tab.state.update({ effects: setSolutionsVisible.of(this.settings.showSolutions) }).state;
-    if (tab.wrap !== this.settings.softWrap) {
-      tab.state = tab.state.update({ effects: wrapCompartment.reconfigure(this.settings.softWrap ? EditorView.lineWrapping : []) }).state;
-      tab.wrap = this.settings.softWrap;
+    if (tab.wrap !== this.lineWrap()) {
+      tab.state = tab.state.update({ effects: wrapCompartment.reconfigure(this.lineWrap() ? EditorView.lineWrapping : []) }).state;
+      tab.wrap = this.lineWrap();
     }
     this.view.setState(tab.state);
     const token = ++this.scrollToken;
@@ -956,7 +991,7 @@ export class App {
         const el = h(
           "div",
           { class: `tab${t === this.active ? " active" : ""}${dirty ? " dirty" : ""}`, role: "tab", title: t.rel },
-          h("span", { class: "tab-name" }, t.name),
+          h("span", { class: "tab-name" }, t.name.replace(/\.md$/i, "")),
           h("span", { class: "tab-dirty", title: de.tabs.unsaved }, "●"),
           close,
         );
@@ -971,6 +1006,8 @@ export class App {
       }),
     );
     const act = this.active;
+    // „Speichern“ shows whether there is something to save
+    this.saveBtn?.classList.toggle("has-changes", !!act && this.isDirty(act));
     void getCurrentWindow()
       .setTitle(act ? `${act.name}${this.isDirty(act) ? " ●" : ""} · ${de.appName}` : de.appName)
       .catch(() => {});
@@ -1227,7 +1264,7 @@ export class App {
     Object.assign(this.settings, result.values);
     this.applyFontSettings();
     this.grammar.updateSettings(this.grammarSettings());
-    if (this.active && this.active.wrap !== this.settings.softWrap) this.activate(this.active);
+    if (this.active && this.active.wrap !== this.lineWrap()) this.activate(this.active);
     this.view.requestMeasure();
     saveSettings(this.settings);
   }
@@ -1309,11 +1346,26 @@ export class App {
 
   private updateStatus() {
     const t = this.active;
-    this.statusLeft.textContent = t ? `${t.rel}  ·  ${t.eol === "\r\n" ? "CRLF" : "LF"}${t.bom ? " · BOM" : ""}  ·  UTF-8` : de.status.noFile;
+    // the path is cut at the start („…/Git/x.md“), the encoding info never
+    this.statusPath.textContent = t ? t.rel : de.status.noFile;
+    this.statusLeft.title = t ? t.path : "";
+    this.statusFile.textContent = t ? `·  ${t.eol === "\r\n" ? "CRLF" : "LF"}${t.bom ? " · BOM" : ""}  ·  UTF-8` : "";
     this.statusRight.textContent = this.index && !this.index.altdirAvailable ? de.status.noAltdir : "";
     this.updateLtStatus();
     this.updateCursor();
   }
+}
+
+// German prose for measuring the average character width of the prose font
+const WIDTH_SAMPLE = "Öffnen Sie ein Terminal und geben Sie das Kommando ein. Was bedeutet die Option, die Sie verwendet haben?";
+
+/** Pixel width of `columns` characters (average over German prose) plus the line padding. */
+function wrapWidth(font: string, sizePx: number, columns: number): number {
+  const ctx = document.createElement("canvas").getContext("2d");
+  if (!ctx) return columns * sizePx * 0.6;
+  ctx.font = `${sizePx}px ${font}`;
+  const avg = ctx.measureText(WIDTH_SAMPLE).width / WIDTH_SAMPLE.length;
+  return avg * Math.max(20, columns) + 16;
 }
 
 function ltLabel(st: LtStatus, enabled: boolean, pending: number): string {

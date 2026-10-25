@@ -100,18 +100,29 @@ export class FileTree {
 
   private applyGitMarks() {
     for (const row of this.list.querySelectorAll<HTMLElement>(".tree-item[data-path]")) {
-      row.querySelector(".git-mark")?.remove();
       row.classList.remove("git-M", "git-A", "git-new", "git-D", "git-R", "git-U");
+      const cell = row.querySelector<HTMLElement>(".cell-git");
+      const alt = row.querySelector<HTMLElement>(".altdir-marker");
+      if (cell) cell.replaceChildren();
+      if (alt) {
+        alt.classList.remove("changed");
+        alt.textContent = alt.classList.contains("yes") ? "L" : "";
+        alt.title = alt.classList.contains("yes") ? de.tree.hasAltdir : de.tree.noAltdir;
+      }
       const m = this.gitMarks.get(row.dataset.path!);
       if (!m) continue;
-      if (m.code) row.classList.add(`git-${m.code === "?" ? "new" : m.code}`);
-      const titles = [m.code === "?" ? de.git.markNew : m.code === "A" ? de.git.markAdded : m.code ? de.git.markModified : null, m.alt ? de.git.markAlt : null].filter(Boolean);
-      const letter = m.code === "?" ? "N" : m.code === "U" ? "!" : (m.code ?? "");
-      const text = `${letter}${m.alt ? "L" : ""}`;
-      const span = h("span", { class: "git-mark", title: titles.join(", ") }, text);
-      const badges = row.querySelector(".tree-badges");
-      if (badges) badges.prepend(span);
-      else row.append(span);
+      if (m.code) {
+        row.classList.add(`git-${m.code === "?" ? "new" : m.code}`);
+        const letter = m.code === "?" ? "N" : m.code === "U" ? "!" : m.code;
+        const title = m.code === "?" ? de.git.markNew : m.code === "A" ? de.git.markAdded : de.git.markModified;
+        cell?.append(h("span", { class: "git-mark", title }, letter));
+      }
+      if (m.alt && alt) {
+        // a changed (possibly new) solution: "L*"
+        alt.classList.add("changed");
+        alt.textContent = "L*";
+        alt.title = de.git.markAlt;
+      }
     }
   }
 
@@ -120,10 +131,10 @@ export class FileTree {
     for (const it of items) this.list.append(this.itemRow(it, 0));
   }
 
-  private group(key: string, label: Node | string, depth: number, fill: (container: HTMLElement) => void, extraClass = "") {
+  private group(key: string, label: Node | string, depth: number, fill: (container: HTMLElement) => void, extraClass = "", badges?: Node) {
     const open = this.expanded.has(key);
-    const children = h("div", { class: "tree-children", role: "group" });
-    const row = h("div", { class: `tree-item tree-group ${extraClass}`, role: "treeitem", "aria-expanded": String(open), style: `--depth:${depth}` }, h("span", { class: "twisty" }, open ? "▾" : "▸"), label);
+    const children = h("div", { class: "tree-children", role: "group", style: `--depth:${depth}` });
+    const row = h("div", { class: `tree-item tree-group ${extraClass}`, role: "treeitem", "aria-expanded": String(open), style: `--depth:${depth}` }, h("span", { class: "twisty" }, open ? "▾" : "▸"), label, badges ?? emptyBadges());
     row.addEventListener("click", () => {
       if (this.expanded.has(key)) this.expanded.delete(key);
       else this.expanded.add(key);
@@ -136,30 +147,41 @@ export class FileTree {
   }
 
   private partLabel(p: PartInfo) {
+    // the name is what authors type in PARTREF/assumes; the title only when it adds something
+    const showTitle = p.title && normalizeName(p.title) !== normalizeName(p.name);
     return h(
       "span",
-      { class: "tree-label" },
+      { class: "tree-label", title: p.title ? `${p.name}: ${p.title}` : p.name },
       h("span", { class: "tree-name" }, p.name),
-      p.title ? h("span", { class: "tree-title" }, p.title) : null,
+      showTitle ? h("span", { class: "tree-title" }, p.title) : null,
       p.missing ? h("span", { class: "badge warn", title: de.tree.missing }, "!") : null,
     );
   }
 
+  /** Fixed, right-aligned columns: git · stage · difficulty · solution (aligned at every depth). */
   private badges(p: PartInfo) {
-    const out: HTMLElement[] = [];
-    if (p.stage) {
-      const stage = p.stage.split(/\s/)[0];
-      out.push(h("span", { class: `badge stage stage-${stage}`, title: de.tree.stage(p.stage) }, stage));
-    }
-    if (p.difficulty) out.push(h("span", { class: "badge diff", title: de.tree.difficulty(p.difficulty) }, `D${p.difficulty}`));
-    if (p.kind === "task" && this.index?.altdirAvailable) {
-      out.push(h("span", { class: `altdir-marker ${p.altdirExists ? "yes" : "no"}`, title: p.altdirExists ? de.tree.hasAltdir : de.tree.noAltdir }, p.altdirExists ? "●" : "○"));
-    }
-    return h("span", { class: "tree-badges" }, ...out);
+    const stage = p.stage ? p.stage.split(/\s/)[0] : "";
+    const stageCell = stage
+      ? h("span", { class: `badge stage stage-${/^[a-z]+$/.test(stage) ? stage : "other"}`, title: de.tree.stage(p.stage!) }, stage)
+      : p.kind === "task"
+        ? h("span", { class: "stage-none", title: de.tree.noStage }, "✓")
+        : null;
+    const d = Number(p.difficulty);
+    const diffCell =
+      d >= 1 && d <= 4
+        ? h("span", { class: `diff-dots difficulty${d}`, title: de.tree.difficulty(d) }, "●".repeat(d) + "○".repeat(4 - d))
+        : p.difficulty
+          ? h("span", { class: "badge warn", title: de.tree.difficulty(Number.NaN) }, p.difficulty)
+          : null;
+    const altCell =
+      p.kind === "task" && this.index?.altdirAvailable
+        ? h("span", { class: `altdir-marker ${p.altdirExists ? "yes" : "no"}`, title: p.altdirExists ? de.tree.hasAltdir : de.tree.noAltdir }, p.altdirExists ? "L" : "")
+        : null;
+    return h("span", { class: "tree-badges" }, h("span", { class: "cell cell-git" }), h("span", { class: "cell cell-stage" }, stageCell), h("span", { class: "cell cell-diff" }, diffCell), h("span", { class: "cell cell-alt" }, altCell));
   }
 
   private fileRow(path: string, label: Node | string, depth: number, badges?: Node, onSelect?: () => void) {
-    const row = h("div", { class: "tree-item tree-file", role: "treeitem", style: `--depth:${depth}`, "data-path": path }, h("span", { class: "twisty" }), label, badges);
+    const row = h("div", { class: "tree-item tree-file", role: "treeitem", style: `--depth:${depth}`, "data-path": path }, h("span", { class: "twisty" }), label, badges ?? emptyBadges());
     row.addEventListener("click", () => {
       onSelect?.();
       this.cb.open(path);
@@ -188,8 +210,8 @@ export class FileTree {
 
   private taskgroupNode(chapter: string, tg: TaskgroupNode, depth: number) {
     const key = `tg:${chapter}/${tg.part.name}`;
-    return this.group(key, h("span", { class: "tree-label" }, this.partLabel(tg.part), this.badges(tg.part)), depth, (c) => {
-      if (!tg.part.missing) c.append(this.fileRow(tg.part.path, h("span", { class: "tree-label" }, h("span", { class: "tree-name dim" }, "index.md")), depth + 1, undefined, () => this.cb.selectTaskgroup(chapter, tg.part.name)));
+    return this.group(key, this.partLabel(tg.part), depth, (c) => {
+      if (!tg.part.missing) c.append(this.fileRow(tg.part.path, indexLabel(), depth + 1, undefined, () => this.cb.selectTaskgroup(chapter, tg.part.name)));
       for (const t of tg.tasks) {
         c.append(this.fileRow(t.path, this.partLabel(t), depth + 1, this.badges(t), () => this.cb.selectTaskgroup(chapter, tg.part.name)));
       }
@@ -198,18 +220,18 @@ export class FileTree {
         const base = tg.part.rel.replace(/index\.md$/, "");
         c.append(this.group(`res:${chapter}/${tg.part.name}`, h("span", { class: "tree-name dim" }, `${de.tree.resources} (${tg.files.length})`), depth + 1, (rc) => this.plainFiles(tg.files, depth + 2, rc, base)));
       }
-    });
+    }, "", this.badges(tg.part));
   }
 
   private renderTree(index: CourseIndex) {
     if (index.duplicateNames.length) this.list.append(h("div", { class: "tree-warning" }, de.tree.duplicates(index.duplicateNames)));
     for (const ch of index.chapters) {
       this.list.append(
-        this.group(`ch:${ch.part.name}`, h("span", { class: "tree-label" }, this.partLabel(ch.part), this.badges(ch.part)), 0, (c) => {
-          if (!ch.part.missing) c.append(this.fileRow(ch.part.path, h("span", { class: "tree-label" }, h("span", { class: "tree-name dim" }, "index.md")), 1));
+        this.group(`ch:${ch.part.name}`, this.partLabel(ch.part), 0, (c) => {
+          if (!ch.part.missing) c.append(this.fileRow(ch.part.path, indexLabel(), 1));
           for (const tg of ch.taskgroups) c.append(this.taskgroupNode(ch.part.name, tg, 1));
           for (const z of ch.zipdirs) c.append(h("div", { class: "tree-item tree-dir", style: "--depth:1" }, h("span", { class: "twisty" }), h("span", { class: "tree-name" }, z.name)));
-        }, "tree-chapter"),
+        }, "tree-chapter", this.badges(ch.part)),
       );
     }
     if (index.glossary) {
@@ -232,4 +254,17 @@ export class FileTree {
       );
     }
   }
+}
+
+function emptyBadges() {
+  return h("span", { class: "tree-badges" }, h("span", { class: "cell cell-git" }), h("span", { class: "cell cell-stage" }), h("span", { class: "cell cell-diff" }), h("span", { class: "cell cell-alt" }));
+}
+
+/** The chapter's or taskgroup's own page (index.md), not a disabled entry. */
+function indexLabel() {
+  return h("span", { class: "tree-label tree-index", title: de.tree.indexTitle }, h("span", { class: "tree-icon" }, "≡"), h("span", { class: "tree-name" }, "index.md"));
+}
+
+function normalizeName(s: string) {
+  return s.toLowerCase().replace(/[\s_\-:]+/g, "");
 }

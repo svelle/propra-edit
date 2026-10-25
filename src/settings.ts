@@ -2,6 +2,8 @@
 
 import { backend } from "./backend";
 
+export type WrapMode = "column" | "window" | "off";
+
 export interface Settings {
   courseRoot: string | null;
   openTabs: string[];
@@ -15,7 +17,12 @@ export interface Settings {
   previewTutor: boolean;
   fontFamily: string;
   fontSize: number;
-  softWrap: boolean;
+  /** Line wrapping: at `wrapColumn` characters, at the window width, or not at all. */
+  wrapMode: WrapMode;
+  wrapColumn: number;
+  /** Prose in a proportional font (top matter, macros, code and tables stay monospace). */
+  proportionalProse: boolean;
+  proseFontFamily: string;
   /** Inline altdir solutions shown. */
   showSolutions: boolean;
   /** Collapsed solution boxes per file (key: path relative to the course root). */
@@ -50,7 +57,10 @@ export const DEFAULT_SETTINGS: Settings = {
   previewTutor: true,
   fontFamily: 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace',
   fontSize: 14,
-  softWrap: true,
+  wrapMode: "column",
+  wrapColumn: 100,
+  proportionalProse: true,
+  proseFontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif',
   showSolutions: true,
   solutionCollapsed: {},
   grammarEnabled: true,
@@ -68,7 +78,11 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export async function loadSettings(): Promise<Settings> {
   const raw = await backend.getSettings().catch(() => ({}));
-  return { ...DEFAULT_SETTINGS, ...(raw as Partial<Settings>) };
+  const r = raw as Partial<Settings> & { softWrap?: boolean };
+  // before wrap modes there was only an on/off switch
+  if (r.wrapMode === undefined && r.softWrap === false) r.wrapMode = "off";
+  delete r.softWrap;
+  return { ...DEFAULT_SETTINGS, ...r };
 }
 
 let pending: number | undefined;

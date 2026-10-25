@@ -6,7 +6,7 @@
 
 import { Facet, StateField, type EditorState, type Extension, type Range } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from "@codemirror/view";
-import { foldService, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { foldNodeProp, foldService, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { yamlLanguage } from "@codemirror/lang-yaml";
@@ -69,6 +69,14 @@ const topMatterMarkdown: MarkdownConfig = {
   wrap: parseMixed((node) => (node.type.name === "TopMatter" ? { parser: yamlLanguage.parser } : null)),
 };
 
+// Markdown folds every block (each paragraph got a fold arrow). Keep folding for code blocks
+// and tables; headings fold through Markdown's heading service, top matter and block macros
+// through propraFolding below.
+const FOLDABLE_BLOCKS = new Set(["FencedCode", "Table"]);
+const quietFolding: MarkdownConfig = {
+  props: [foldNodeProp.add((type) => (type.is("Block") && !type.is("Document") && !FOLDABLE_BLOCKS.has(type.name) ? () => null : undefined))],
+};
+
 // ----- Highlight style (colors come from CSS variables in styles.css)
 
 const highlightStyle = HighlightStyle.define([
@@ -78,7 +86,8 @@ const highlightStyle = HighlightStyle.define([
   { tag: t.emphasis, class: "tok-emphasis" },
   { tag: t.strong, class: "tok-strong" },
   { tag: t.strikethrough, class: "tok-strike" },
-  { tag: [t.link, t.url], class: "tok-link" },
+  { tag: t.link, class: "tok-link" },
+  { tag: t.url, class: "tok-url" },
   { tag: t.monospace, class: "tok-mono" },
   { tag: t.quote, class: "tok-quote" },
   { tag: t.contentSeparator, class: "tok-list" }, // not t.list: it covers whole list items
@@ -169,12 +178,14 @@ function lineClasses(doc: ProPraDoc, line: number): string {
     else if (line === sepLine) classes.push("cm-pm-tm cm-pm-tm-sep");
   }
   let inner: Block | undefined;
+  let section: string | undefined;
   let inInstructor = false;
   for (const b of doc.blocks) {
     if (b.open.line > line) break;
     const lastLine = b.close ? b.close.line : b.bodyEndLine;
     if (line > lastLine) continue;
     if (b.family === "instructor") inInstructor = true;
+    if (b.family === "section" && b.open.args[0]) section = b.open.args[0];
     if (line === b.open.line || (b.close && line === b.close.line)) {
       classes.push(`cm-pm-blockline cm-pm-blockline-${b.family}`);
     } else if (!inner || b.depth >= inner.depth) {
@@ -183,6 +194,10 @@ function lineClasses(doc: ProPraDoc, line: number): string {
   }
   if (inner) classes.push(`cm-pm-body cm-pm-body-${inner.family}`);
   if (inInstructor) classes.push("cm-pm-in-instructor");
+  if (section) classes.push(`cm-pm-sec cm-pm-sec-${/^[a-z]+$/.test(section) ? section : "other"}`);
+  // stay monospace with a proportional prose font
+  if (doc.fences.some((f) => line >= f.startLine && line <= f.endLine)) classes.push("cm-pm-code");
+  else if (/^\s*\|/.test(doc.text.slice(doc.lineStarts[line], doc.lineStarts[line] + 200))) classes.push("cm-pm-table");
   const ls = doc.lineStarts[line];
   if (doc.macrosOff.some((r) => ls >= r.from && ls < r.to)) classes.push("cm-pm-off");
   return classes.join(" ");
@@ -254,7 +269,7 @@ export function propraLanguage(info: ProPraFileInfo): Extension {
     markdown({
       base: markdownLanguage,
       codeLanguages: languages,
-      extensions: info.topMatter ? [topMatterMarkdown] : [],
+      extensions: info.topMatter ? [topMatterMarkdown, quietFolding] : [quietFolding],
     }),
     syntaxHighlighting(highlightStyle),
     propraDoc,

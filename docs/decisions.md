@@ -414,3 +414,28 @@ Still to do: the same measurements on macOS and Windows (the user's machines).
 - Not done: discarding changes, conflict resolution, branch switching (plan: none in v1),
   markers on chapter/taskgroup rows.
 
+## Design review (two rounds)
+
+- **Tree:** the part name stays the main label (it is what PARTREF/assumes use); the title is
+  hidden when it only repeats the name and gives way first when space is short. Fixed,
+  right-aligned columns at every depth: git letter · stage · difficulty · solution. Stages:
+  draft dashed gray, alpha amber, beta blue, finished (no stage) a faint ✓ with a tooltip; the
+  names are the course's own stage values. Difficulty as sedrila's colored dots plus the
+  count (●●○○). Solution: „L“ present, „L*“ changed in git, dashed box missing. Indent guides,
+  larger steps and chevrons; index.md with an icon instead of dimmed text.
+- **Toolbar:** button look, groups with separators, toggles (Glossar, Lösungen, Vorschau, Git)
+  show ✓ and a pressed state, „Speichern ●“ when the active file has unsaved changes.
+- **Editor:** prose in a proportional font by default (top matter, macros, inline code,
+  fenced code and tables stay monospace). Wrapping at a column (default 100, measured as the
+  average width of German prose in the prose font, with a faint ruler), at the window edge,
+  or off. Fold arrows only for top matter, block macros, headings, code blocks and tables.
+  Section types get their own left bar and tint (goal, background, instructions,
+  submission); a sticky header shows section, heading and block of the top visible line
+  (click: jump to the section). Link targets are dimmed and smaller than link text. The top
+  matter has its own block with a separator line. CodeMirror's own strings (search panel
+  etc.) are translated.
+- **Status bar:** „LanguageTool nicht verfügbar“ instead of „Fehler“; ✓/◌/✕ instead of a
+  colored dot; „⚠ 3 Hinweise“; the path is cut at the start („…/Git/x.md“).
+- **Not done:** hiding URLs until the cursor enters a link (possible, but changes what is
+  seen while typing), an outline panel, hanging indent for wrapped list items.
+

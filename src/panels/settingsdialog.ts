@@ -6,7 +6,7 @@ import { h, showDialog } from "../ui/dom";
 
 export interface SettingsResult {
   changeCourse: boolean;
-  values: Pick<Settings, "fontFamily" | "fontSize" | "softWrap" | "grammarEnabled" | "ltDisabledRules" | "ltEnabledRules" | "buildCommand" | "buildOutDir" | "gitPath">;
+  values: Pick<Settings, "fontFamily" | "fontSize" | "wrapMode" | "wrapColumn" | "proportionalProse" | "proseFontFamily" | "grammarEnabled" | "ltDisabledRules" | "ltEnabledRules" | "buildCommand" | "buildOutDir" | "gitPath">;
 }
 
 export interface SettingsDialogDeps {
@@ -17,8 +17,18 @@ export interface SettingsDialogDeps {
 export async function settingsDialog(s: Settings, deps: SettingsDialogDeps): Promise<SettingsResult | null> {
   const font = h("input", { type: "text", value: s.fontFamily, spellcheck: "false" });
   const size = h("input", { type: "number", min: 8, max: 40, value: s.fontSize });
-  const wrap = h("input", { type: "checkbox" });
-  wrap.checked = s.softWrap;
+  const proportional = h("input", { type: "checkbox" });
+  proportional.checked = s.proportionalProse;
+  const proseFont = h("input", { type: "text", value: s.proseFontFamily, spellcheck: "false" });
+  const wrapMode = h("select", {}, h("option", { value: "column" }, de.settings.wrapColumnMode), h("option", { value: "window" }, de.settings.wrapWindow), h("option", { value: "off" }, de.settings.wrapOff)) as HTMLSelectElement;
+  wrapMode.value = s.wrapMode;
+  const wrapColumn = h("input", { type: "number", min: 40, max: 400, value: s.wrapColumn });
+  const syncWrap = () => ((wrapColumn as HTMLInputElement).disabled = wrapMode.value !== "column");
+  wrapMode.addEventListener("change", syncWrap);
+  syncWrap();
+  const syncProse = () => ((proseFont as HTMLInputElement).disabled = !proportional.checked);
+  proportional.addEventListener("change", syncProse);
+  syncProse();
   const grammar = h("input", { type: "checkbox" });
   grammar.checked = s.grammarEnabled;
   const disabled = h("input", { type: "text", value: s.ltDisabledRules.join(", "), spellcheck: "false" });
@@ -46,7 +56,9 @@ export async function settingsDialog(s: Settings, deps: SettingsDialogDeps): Pro
     h("div", { class: "form-row" }, h("span", {}, de.settings.courseRoot), h("code", { class: "form-path" }, s.courseRoot ?? "–")),
     h("label", {}, de.settings.fontFamily, font),
     h("label", {}, de.settings.fontSize, size),
-    h("label", { class: "checkbox" }, wrap, de.settings.softWrap),
+    h("label", { class: "checkbox" }, proportional, de.settings.proportionalProse),
+    h("label", {}, de.settings.proseFont, proseFont),
+    h("div", { class: "form-row form-inline" }, h("label", {}, de.settings.wrap, wrapMode), h("label", {}, de.settings.wrapColumn, wrapColumn)),
     h("label", { class: "checkbox" }, grammar, de.settings.grammar),
     h("label", {}, de.settings.disabledRules, disabled),
     h("label", {}, de.settings.enabledRules, enabled),
@@ -75,7 +87,10 @@ export async function settingsDialog(s: Settings, deps: SettingsDialogDeps): Pro
     values: {
       fontFamily: font.value.trim() || s.fontFamily,
       fontSize: Number.isFinite(n) && n >= 8 && n <= 40 ? n : s.fontSize,
-      softWrap: wrap.checked,
+      wrapMode: wrapMode.value as Settings["wrapMode"],
+      wrapColumn: clampInt(Number(wrapColumn.value), 40, 400, s.wrapColumn),
+      proportionalProse: proportional.checked,
+      proseFontFamily: proseFont.value.trim() || s.proseFontFamily,
       grammarEnabled: grammar.checked,
       ltDisabledRules: splitList(disabled.value),
       ltEnabledRules: splitList(enabled.value),
@@ -84,6 +99,10 @@ export async function settingsDialog(s: Settings, deps: SettingsDialogDeps): Pro
       gitPath: gitPath.value.trim(),
     },
   };
+}
+
+function clampInt(n: number, min: number, max: number, fallback: number): number {
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback;
 }
 
 function splitList(v: string): string[] {
