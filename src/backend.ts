@@ -79,6 +79,11 @@ export interface TextFile {
   mixedEol: boolean;
 }
 
+export interface LtStatus {
+  state: "starting" | "ready" | "error" | "stopped";
+  message: string | null;
+}
+
 export interface NewTaskPaths {
   task: string;
   altdir: string | null;
@@ -98,11 +103,18 @@ export const backend = {
   newTaskPaths: (chapter: string, taskgroup: string, name: string) =>
     invoke<NewTaskPaths>("new_task_paths", { chapter, taskgroup, name }),
   isCourseRoot: (dir: string) => invoke<boolean>("is_course_root", { dir }),
+  ltStatus: () => invoke<LtStatus>("lt_status"),
+  ltRestart: () => invoke<void>("lt_restart"),
+  ltCheck: (data: string, disabledRules: string[], enabledRules: string[]) =>
+    invoke<string>("lt_check", { data, language: "de-DE", disabledRules, enabledRules }),
+  getDictionary: () => invoke<string[]>("get_dictionary"),
+  saveDictionary: (words: string[]) => invoke<void>("save_dictionary", { words }),
 };
 
 export const events = {
   onFileChanged: (cb: (paths: string[]) => void): Promise<UnlistenFn> => listen<string[]>("file-changed", (e) => cb(e.payload)),
   onIndexChanged: (cb: (index: CourseIndex) => void): Promise<UnlistenFn> =>
     listen<CourseIndex>("index-changed", (e) => cb(e.payload)),
+  onLtStatus: (cb: (s: LtStatus) => void): Promise<UnlistenFn> => listen<LtStatus>("lt-status", (e) => cb(e.payload)),
   onIndexError: (cb: (msg: string) => void): Promise<UnlistenFn> => listen<string>("index-error", (e) => cb(e.payload)),
 };

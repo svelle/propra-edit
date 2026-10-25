@@ -11,6 +11,14 @@ export interface Settings {
   fontFamily: string;
   fontSize: number;
   softWrap: boolean;
+  grammarEnabled: boolean;
+  ltDisabledRules: string[];
+  ltEnabledRules: string[];
+  /** Optional overrides for development: path to java and to the LanguageTool jar directory. */
+  ltJava: string;
+  ltLibDir: string;
+  /** Lint ids silenced per file (key: file path relative to the course root). */
+  silencedLints: Record<string, string[]>;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -22,6 +30,12 @@ export const DEFAULT_SETTINGS: Settings = {
   fontFamily: 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace',
   fontSize: 14,
   softWrap: true,
+  grammarEnabled: true,
+  ltDisabledRules: ["WHITESPACE_RULE"],
+  ltEnabledRules: [],
+  ltJava: "",
+  ltLibDir: "",
+  silencedLints: {},
 };
 
 export async function loadSettings(): Promise<Settings> {

@@ -3,6 +3,7 @@
 
 pub mod course;
 pub mod fs;
+pub mod lt;
 pub mod settings;
 pub mod watcher;
 
@@ -23,6 +24,11 @@ struct OpenCourse {
 #[derive(Default)]
 struct AppState {
     course: Arc<Mutex<Option<OpenCourse>>>,
+    lt: Mutex<Option<lt::LanguageTool>>,
+}
+
+fn lt_handle(state: &AppState) -> Result<lt::LanguageTool, String> {
+    state.lt.lock().unwrap().clone().ok_or_else(|| "LanguageTool ist nicht initialisiert".to_string())
 }
 
 fn settings_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -189,6 +195,76 @@ async fn new_task_paths(
     })
 }
 
+#[tauri::command]
+async fn lt_status(state: State<'_, AppState>) -> Result<lt::LtStatus, String> {
+    Ok(lt_handle(&state)?.status())
+}
+
+#[tauri::command]
+async fn lt_restart(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let lt = lt_handle(&state)?;
+    lt.set_location(lt_location(&app));
+    lt.restart();
+    Ok(())
+}
+
+/// Check annotated text (LanguageTool's `data` JSON). Returns LanguageTool's JSON response.
+#[tauri::command]
+async fn lt_check(
+    state: State<'_, AppState>,
+    data: String,
+    language: String,
+    disabled_rules: Vec<String>,
+    enabled_rules: Vec<String>,
+) -> Result<String, String> {
+    let lt = lt_handle(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let disabled = disabled_rules.join(",");
+        let enabled = enabled_rules.join(",");
+        let mut form: Vec<(&str, &str)> = vec![("language", &language), ("data", &data)];
+        if !disabled.is_empty() {
+            form.push(("disabledRules", &disabled));
+        }
+        if !enabled.is_empty() {
+            form.push(("enabledRules", &enabled));
+        }
+        lt.check(&form)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn get_dictionary(app: AppHandle) -> Result<Vec<String>, String> {
+    Ok(settings::load_words(&settings_dir(&app)?))
+}
+
+#[tauri::command]
+async fn save_dictionary(app: AppHandle, words: Vec<String>) -> Result<(), String> {
+    settings::save_words(&settings_dir(&app)?, &words)
+}
+
+fn lt_location(app: &AppHandle) -> Result<lt::LtLocation, String> {
+    let cfg = settings_dir(app).map(|d| settings::load(&d)).unwrap_or_default();
+    let path_setting = |k: &str| cfg.get(k).and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(PathBuf::from);
+    let resources = app.path().resource_dir().ok();
+    lt::locate(resources.as_deref(), path_setting("ltJava"), path_setting("ltLibDir"))
+}
+
+fn start_languagetool(app: &AppHandle) {
+    let work_dir = app
+        .path()
+        .app_log_dir()
+        .or_else(|_| app.path().app_cache_dir())
+        .unwrap_or_else(|_| std::env::temp_dir().join("propra-editor"));
+    let app2 = app.clone();
+    let lt = lt::LanguageTool::new(lt_location(app), work_dir, Arc::new(move |s| {
+        let _ = app2.emit("lt-status", s);
+    }));
+    lt.restart();
+    *app.state::<AppState>().lt.lock().unwrap() = Some(lt);
+}
+
 /// Checks whether `dir` contains `sedrila.yaml` (used by the course picker).
 #[tauri::command]
 async fn is_course_root(dir: String) -> bool {
@@ -262,9 +338,25 @@ pub fn run() {
             path_exists,
             new_task_paths,
             is_course_root,
+            lt_status,
+            lt_restart,
+            lt_check,
+            get_dictionary,
+            save_dictionary,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .setup(|app| {
+            start_languagetool(app.handle());
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(lt) = app.state::<AppState>().lt.lock().unwrap().as_ref() {
+                    lt.shutdown();
+                }
+            }
+        });
 }
 
 #[cfg(test)]

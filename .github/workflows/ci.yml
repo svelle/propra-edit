@@ -64,8 +64,28 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+          cache-dependency-path: scripts/languagetool/pom.xml
       - run: npm ci
       - run: npm test
+      - name: Fetch LanguageTool and build the trimmed JRE
+        if: runner.os != 'Windows'
+        run: ./scripts/fetch-runtime.sh
+      - name: Fetch LanguageTool and build the trimmed JRE (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/fetch-runtime.ps1
+      - run: npm run build
+      - name: Smoke test LanguageTool with the bundled runtime
+        shell: bash
+        env:
+          PROPRA_LT_LIB: ${{ github.workspace }}/src-tauri/resources/languagetool/lib
+          PROPRA_LT_JAVA: ${{ github.workspace }}/src-tauri/resources/jre/bin/java${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: cargo test --manifest-path src-tauri/Cargo.toml real_server_check -- --nocapture
       - run: npx tauri build
       - name: cargo test (native paths on this platform)
         run: cargo test --manifest-path src-tauri/Cargo.toml

@@ -17,6 +17,9 @@ npm run typecheck           # tsc --noEmit
 npm test                    # Vitest (parser, fuzzy matcher, ...)
 PROPRA_INF_DIR=/path/to/propra-inf npm test   # + golden test over a real course checkout
 cargo test --manifest-path src-tauri/Cargo.toml   # Rust tests (needs dist/ to exist: run npm run build once)
+./scripts/fetch-runtime.sh   # LanguageTool jars + trimmed JRE into src-tauri/resources (Maven + JDK 21)
+PROPRA_LT_LIB=src-tauri/resources/languagetool/lib PROPRA_LT_JAVA=src-tauri/resources/jre/bin/java \
+  cargo test --manifest-path src-tauri/Cargo.toml real_server_check   # end-to-end LanguageTool test
 ```
 
 On Linux, building needs `libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev`.
@@ -29,6 +32,8 @@ On Linux, building needs `libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev lib
   inline solutions and preview all consume it; nobody re-parses with their own regexes.
 - `src/editor/macros.ts`: macro table (names, arities, block families).
 - `src/editor/propra-language.ts`: CodeMirror language, decorations, folding.
+- `src-tauri/src/lt.rs`: LanguageTool process (start, health check, warm-up, restart) and check proxy.
+- `src/grammar/`: masking (`mask.ts`), batching/caching client (`client.ts`), CodeMirror integration (`grammar.ts`).
 - `src/app.ts`: tabs, saving, external changes. `src/panels/`: tree, quick open, dialogs.
 - `src/i18n/de.ts`: all UI strings.
 - `test-fixtures/course/`: fake course incl. altdir. Automated tests use only this.

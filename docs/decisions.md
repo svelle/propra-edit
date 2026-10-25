@@ -110,11 +110,77 @@ sandbox; Maven Central works and is a viable source for `scripts/fetch-runtime`.
 | RSS after a few checks | ~880 MB |
 | Detects „Fehlerr“ (GERMAN_SPELLER_RULE) and „mit der Kommando“ (DE_AGREEMENT) | yes |
 
-Consequences for Phase 2:
-- Send a warm-up check right after start, so the first real check is not 15 s.
-- The German speller dominates check time here. Must be re-measured on the target
-  machines; if it stays above ~1 s, options are a client-side spell checker
-  (Hunspell dictionary in the frontend or Rust) with LanguageTool for grammar only,
-  or tuning the speller. Not decided yet.
-- RAM is within the plan's 500 MB to 1 GB estimate; keep `-Xmx1g`.
-- Still to do on macOS and Windows: jlink-trimmed JRE, startup time and RAM.
+**Resolved in Phase 2:** the slowness was not the speller as such. LanguageTool's server
+builds a new rule pipeline (including `GermanSpellerRule.init`) for every request unless
+`pipelineCaching=true` is set (found with jstack). With
+
+```
+pipelineCaching=true
+maxPipelinePoolSize=2
+pipelineExpireTimeInSeconds=86400
+```
+
+the numbers become (same sandbox, jlink JRE, `-Xmx1g -XX:+UseSerialGC`):
+
+| Measurement | Result |
+| --- | --- |
+| Startup until HTTP answers | ~2 s |
+| Warm-up check (done by the app before reporting „bereit“) | 11 to 15 s |
+| One sentence after warm-up | 25 to 45 ms |
+| 40-line passage | ~0.7 s |
+| Whole real task file (13 to 37 chunks, one batch) | 0.6 to 1.6 s |
+| RSS | ~810 MB |
+
+`pipelinePrewarming=true` was rejected: it warms all languages, startup 21 s, 1.3 GB.
+Still to do: the same measurements on macOS and Windows (the user's machines).
+
+## Phase 2: LanguageTool integration
+
+- **Source:** Maven Central (`org.languagetool:languagetool-server` + `language-de`, 6.8),
+  resolved by `scripts/fetch-runtime.*` with `mvn -C` (strict checksum verification).
+  languagetool.org is not needed. Only German is bundled (252 MB of jars); English was in
+  the plan but nothing in the course needs it.
+- **JRE:** `jlink` from the JDK that runs the script (CI: Temurin 21 via setup-java, which
+  verifies its download). Modules: java.base, java.compiler, java.desktop, java.instrument,
+  java.logging, java.management, java.naming, java.net.http, java.scripting, java.sql,
+  java.xml, jdk.crypto.ec, jdk.httpserver, jdk.localedata (de, en), jdk.unsupported,
+  jdk.zipfs. 57 MB. The macOS build is arm64 only (macos-latest runners).
+- **Bundling:** Tauri resources `resources/jre/` and `resources/languagetool/`. Placeholder
+  `.gitkeep` files keep the directories present so builds work without the runtime; the app
+  then shows „LanguageTool: Fehler“ with the hint to run the script. Settings `ltJava` and
+  `ltLibDir` can point to another Java/jar directory.
+- **Process:** Rust starts the server at launch on 127.0.0.1 and a free port, health-checks
+  `/v2/languages`, sends a warm-up check, then reports „bereit“. Checks wait for that state.
+  Crashes restart with backoff 1, 2, 4, 8, 16 s (at most 5 times; counter resets after 5
+  minutes of uptime); the status bar button restarts manually. The process is killed on app
+  exit. If the app itself crashes, the Java process stays until it is killed (no job object
+  or parent watchdog yet).
+- **HTTP client:** `ureq` 2.12.1 without TLS (localhost only).
+- **Masking** (`src/grammar/mask.ts`): every character is prose or markup; markup can carry
+  `interpretAs`. Priorities, low to high: line breaks (→ space), paragraph breaks before list
+  items/headings/quotes/table rows (→ blank line), Markdown marks from the syntax tree,
+  trailing whitespace, bare URLs and paths (→ „X“), fences/macros-off/replacement tags,
+  top matter, macros. Macro rules: `[TERMREF::x]` → „x“, `[TERMREF2::x::-s]` → „xs“, other
+  `TERMREF2`/`PARTREF2` texts and HINT/FOLDOUT/INSTRUCTOR titles are checked as prose,
+  `[PARTREF::x]` → „x“, HREF and EREF → „X“, label macros at line start (`[EQ] …`,
+  `- [EREFQ::1] …`) vanish with their space, block macro lines → blank line.
+  Inline code is read as „X“ so sentences keep a word there.
+- **Incremental checks:** chunks are runs of non-blank lines (fences and macros-off regions
+  do not split). Results are cached by the chunk's exact segment content, so editing one
+  paragraph re-checks only that paragraph. Uncached chunks are batched into one request
+  (up to 20,000 characters). The linter runs 400 ms after typing stops; results arrive
+  asynchronously and trigger a re-lint, so typing is never blocked.
+- **Noise filters** (found on 5 real tasks, see below): matches that only cover markup or
+  the whitespace next to it are dropped; `UPPERCASE_SENTENCE_START` at the very start of a
+  chunk is dropped (a sentence often continues after a code block).
+- **Speller acceptance:** personal dictionary (`dictionary.json` in the config dir), all
+  glossary names and part names (also split at spaces, hyphens, underscores), and simple
+  inflections of glossary/part names (+s, +es, +en, +n, +e). Filtering happens client-side,
+  so changes apply immediately.
+- **Default rule settings:** `WHITESPACE_RULE` disabled (tables and alignment). The German
+  straight-quote rule `TYPOGRAFISCHE_ANFUEHRUNGSZEICHEN` is off in LanguageTool by default
+  and can be enabled in the settings, as can `DE_DASH` etc.
+- **Real-file check (5 propra-inf tasks):** no false positives on macros, code, URLs, paths
+  or top matter after the fixes above. Remaining hits are English technical words (to be
+  handled by glossary and dictionary) and real findings, for example a stray „)“ in
+  `Werkzeuge/Git/git-Funktionsweise.md` line 50.

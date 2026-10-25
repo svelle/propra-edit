@@ -23,6 +23,25 @@ pub fn save(dir: &Path, value: &Value) -> Result<(), String> {
     crate::fs::write_atomic(&dir.join(FILE_NAME), text.as_bytes())
 }
 
+pub const DICTIONARY_FILE: &str = "dictionary.json";
+
+/// Personal dictionary: a JSON array of words.
+pub fn load_words(dir: &Path) -> Vec<String> {
+    std::fs::read_to_string(dir.join(DICTIONARY_FILE))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok())
+        .unwrap_or_default()
+}
+
+pub fn save_words(dir: &Path, words: &[String]) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {}", dir.display(), e))?;
+    let mut sorted: Vec<&String> = words.iter().collect();
+    sorted.sort_by_key(|w| w.to_lowercase());
+    sorted.dedup();
+    let text = serde_json::to_string_pretty(&sorted).map_err(|e| e.to_string())?;
+    crate::fs::write_atomic(&dir.join(DICTIONARY_FILE), text.as_bytes())
+}
+
 pub fn course_root(value: &Value) -> Option<PathBuf> {
     value.get("courseRoot")?.as_str().filter(|s| !s.is_empty()).map(PathBuf::from)
 }

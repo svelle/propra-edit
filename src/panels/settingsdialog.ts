@@ -6,7 +6,7 @@ import { h, showDialog } from "../ui/dom";
 
 export interface SettingsResult {
   changeCourse: boolean;
-  values: Pick<Settings, "fontFamily" | "fontSize" | "softWrap">;
+  values: Pick<Settings, "fontFamily" | "fontSize" | "softWrap" | "grammarEnabled" | "ltDisabledRules" | "ltEnabledRules">;
 }
 
 export async function settingsDialog(s: Settings): Promise<SettingsResult | null> {
@@ -14,6 +14,10 @@ export async function settingsDialog(s: Settings): Promise<SettingsResult | null
   const size = h("input", { type: "number", min: 8, max: 40, value: s.fontSize });
   const wrap = h("input", { type: "checkbox" });
   wrap.checked = s.softWrap;
+  const grammar = h("input", { type: "checkbox" });
+  grammar.checked = s.grammarEnabled;
+  const disabled = h("input", { type: "text", value: s.ltDisabledRules.join(", "), spellcheck: "false" });
+  const enabled = h("input", { type: "text", value: s.ltEnabledRules.join(", "), spellcheck: "false" });
   const body = h(
     "div",
     { class: "form" },
@@ -21,6 +25,10 @@ export async function settingsDialog(s: Settings): Promise<SettingsResult | null
     h("label", {}, de.settings.fontFamily, font),
     h("label", {}, de.settings.fontSize, size),
     h("label", { class: "checkbox" }, wrap, de.settings.softWrap),
+    h("label", { class: "checkbox" }, grammar, de.settings.grammar),
+    h("label", {}, de.settings.disabledRules, disabled),
+    h("label", {}, de.settings.enabledRules, enabled),
+    h("div", { class: "form-hint" }, de.settings.rulesHint),
   );
   const choice = await showDialog<"ok" | "cancel" | "course">({
     title: de.settings.title,
@@ -40,6 +48,13 @@ export async function settingsDialog(s: Settings): Promise<SettingsResult | null
       fontFamily: font.value.trim() || s.fontFamily,
       fontSize: Number.isFinite(n) && n >= 8 && n <= 40 ? n : s.fontSize,
       softWrap: wrap.checked,
+      grammarEnabled: grammar.checked,
+      ltDisabledRules: splitList(disabled.value),
+      ltEnabledRules: splitList(enabled.value),
     },
   };
+}
+
+function splitList(v: string): string[] {
+  return v.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
 }

@@ -18,6 +18,8 @@ import { bracketMatching, foldGutter, foldKeymap, indentOnInput, LanguageDescrip
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
 import { languages } from "@codemirror/language-data";
 import { propraLanguage } from "./propra-language";
+import { lintKeymap } from "@codemirror/lint";
+import { quickFixKeymap } from "./quickfix";
 import type { ParserConfig } from "./parser";
 
 export const wrapCompartment = new Compartment();
@@ -31,6 +33,8 @@ export interface FileSetup {
   softWrap: boolean;
   /** Extra extensions from the app (update listener, key bindings). */
   extra: Extension;
+  /** Extra extensions for Markdown files only (grammar, lints, completion). */
+  markdownExtra: Extension;
 }
 
 function fileName(path: string) {
@@ -71,6 +75,8 @@ export function createState(text: string, setup: FileSetup): EditorState {
       EditorView.contentAttributes.of({ spellcheck: "false", autocorrect: "off", autocapitalize: "off" }),
       wrapCompartment.of(setup.softWrap ? EditorView.lineWrapping : []),
       languageCompartment.of(setup.isMarkdown ? propraLanguage({ topMatter: setup.topMatter, cfg: setup.parserConfig }) : []),
+      setup.isMarkdown ? setup.markdownExtra : [],
+      keymap.of([...quickFixKeymap, ...lintKeymap]),
       setup.extra,
     ],
   });

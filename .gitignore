@@ -2,7 +2,9 @@ node_modules/
 dist/
 src-tauri/target/
 src-tauri/gen/
-src-tauri/resources/jre-*/
-src-tauri/resources/languagetool/
+src-tauri/resources/jre/*
+!src-tauri/resources/jre/.gitkeep
+src-tauri/resources/languagetool/*
+!src-tauri/resources/languagetool/.gitkeep
 .DS_Store
 *.log

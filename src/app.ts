@@ -5,8 +5,9 @@ import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { EditorState, type Text } from "@codemirror/state";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { backend, events, type CourseIndex, type TextFile } from "./backend";
-import { findPartByPath, hasTopMatter, openableItems, parserConfigFor } from "./course";
+import { backend, events, type CourseIndex, type LtStatus, type TextFile } from "./backend";
+import { findPartByPath, hasTopMatter, openableItems, parserConfigFor, partNames } from "./course";
+import { GrammarService } from "./grammar/grammar";
 import { createState, languageCompartment, loadOtherLanguage, wrapCompartment } from "./editor/setup";
 import { de } from "./i18n/de";
 import { FileTree } from "./panels/filetree";
@@ -53,10 +54,32 @@ export class App {
   private statusLeft = h("span", { class: "status-left" });
   private statusPos = h("span", { class: "status-pos" });
   private statusRight = h("span", { class: "status-right" });
+  private statusLt = h("button", { class: "status-lt", title: de.grammar.restartHint });
+  private grammar!: GrammarService;
+  private ltStatus: LtStatus = { state: "starting", message: null };
 
   async start(root: HTMLElement) {
     this.settings = await loadSettings();
     this.applyFontSettings();
+    this.grammar = new GrammarService(
+      {
+        check: (data, disabled, enabled) => backend.ltCheck(data, disabled, enabled),
+        saveDictionary: (words) => void backend.saveDictionary(words).catch((e) => toast(String(e), "error")),
+        saveSettings: (g) => {
+          this.settings.ltDisabledRules = g.disabledRules;
+          this.settings.ltEnabledRules = g.enabledRules;
+          saveSettings(this.settings);
+        },
+        onActivity: () => this.updateLtStatus(),
+      },
+      this.grammarSettings(),
+    );
+    void backend.getDictionary().then((w) => this.grammar.setDictionary(w)).catch(() => {});
+    this.statusLt.addEventListener("click", () => {
+      this.ltStatus = { state: "starting", message: null };
+      this.updateLtStatus();
+      void backend.ltRestart().catch((e) => toast(String(e), "error"));
+    });
     this.tree = new FileTree(
       {
         open: (p) => void this.openFile(p),
@@ -121,7 +144,7 @@ export class App {
       resizer.addEventListener("pointerup", up, { once: true });
     });
     const main = h("main", { class: "main" }, this.tabBar, this.editorHost, this.welcome);
-    const status = h("footer", { class: "statusbar" }, this.statusLeft, this.statusPos, h("span", { class: "spacer" }), this.statusRight);
+    const status = h("footer", { class: "statusbar" }, this.statusLeft, this.statusPos, h("span", { class: "spacer" }), this.statusRight, this.statusLt);
     root.replaceChildren(toolbar, h("div", { class: "workspace" }, sidebar, resizer, main), status);
   }
 
@@ -180,8 +203,13 @@ export class App {
     }
   }
 
+  private grammarSettings() {
+    return { enabled: this.settings.grammarEnabled, disabledRules: this.settings.ltDisabledRules, enabledRules: this.settings.ltEnabledRules };
+  }
+
   private setIndex(index: CourseIndex) {
     this.index = index;
+    this.grammar.setAcceptedNames([...partNames(index), ...index.glossaryTerms.flatMap((t) => t.names)]);
     this.tree.setIndex(index);
     this.tree.setActive(this.active?.path ?? null);
     this.updateStatus();
@@ -215,6 +243,7 @@ export class App {
       parserConfig: parserConfigFor(this.index),
       softWrap: this.settings.softWrap,
       extra: EditorView.updateListener.of((u: ViewUpdate) => this.onEditorUpdate(u)),
+      markdownExtra: [this.grammar.extension()],
     });
   }
 
@@ -398,6 +427,12 @@ export class App {
       await events.onFileChanged((paths) => void this.onFilesChanged(paths));
       await events.onIndexChanged((index) => this.setIndex(index));
       await events.onIndexError((msg) => toast(msg, "error"));
+      await events.onLtStatus((st) => {
+        this.ltStatus = st;
+        this.updateLtStatus();
+        if (st.state === "ready") this.grammar.refresh();
+      });
+      this.ltStatus = await backend.ltStatus();
     } catch {
       /* not running inside Tauri */
     }
@@ -512,6 +547,7 @@ export class App {
     if (result.changeCourse) return void this.chooseCourse();
     Object.assign(this.settings, result.values);
     this.applyFontSettings();
+    this.grammar.updateSettings(this.grammarSettings());
     if (this.active && this.active.wrap !== this.settings.softWrap) this.activate(this.active);
     this.view.requestMeasure();
     saveSettings(this.settings);
@@ -544,6 +580,14 @@ export class App {
 
   // ----- status bar
 
+  private updateLtStatus() {
+    if (!this.grammar) return;
+    const st = this.ltStatus;
+    this.statusLt.textContent = ltLabel(st, this.settings.grammarEnabled, this.grammar.client.pending);
+    this.statusLt.className = `status-lt lt-${st.state}`;
+    this.statusLt.title = [st.message, de.grammar.restartHint].filter(Boolean).join("\n");
+  }
+
   private updateCursor() {
     if (!this.active) {
       this.statusPos.textContent = "";
@@ -557,11 +601,18 @@ export class App {
   private updateStatus() {
     const t = this.active;
     this.statusLeft.textContent = t ? `${t.rel}  ·  ${t.eol === "\r\n" ? "CRLF" : "LF"}${t.bom ? " · BOM" : ""}  ·  UTF-8` : de.status.noFile;
-    const parts = [de.status.languageTool];
-    if (this.index && !this.index.altdirAvailable) parts.unshift(de.status.noAltdir);
-    this.statusRight.textContent = parts.join("  ·  ");
+    this.statusRight.textContent = this.index && !this.index.altdirAvailable ? de.status.noAltdir : "";
+    this.updateLtStatus();
     this.updateCursor();
   }
+}
+
+function ltLabel(st: LtStatus, enabled: boolean, pending: number): string {
+  if (!enabled) return de.grammar.status.disabled;
+  if (st.state === "ready") return pending ? `${de.grammar.status.ready}, ${de.grammar.checking(pending)}` : de.grammar.status.ready;
+  if (st.state === "starting") return st.message ? `${de.grammar.status.starting} ${st.message}` : de.grammar.status.starting;
+  if (st.state === "error") return de.grammar.status.error;
+  return de.grammar.status.stopped;
 }
 
 function modKey() {

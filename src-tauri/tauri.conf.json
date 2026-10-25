@@ -35,6 +35,10 @@
     ],
     "macOS": {
       "signingIdentity": "-"
+    },
+    "resources": {
+      "resources/jre/": "jre/",
+      "resources/languagetool/": "languagetool/"
     }
   }
 }

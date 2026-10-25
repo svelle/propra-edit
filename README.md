@@ -4,8 +4,9 @@ A lean desktop editor (macOS, Windows) for writing German task files for the
 [propra-inf](https://github.com/fubinf/propra-inf) course, built with
 [sedrila](https://github.com/fubinf/sedrila).
 
-Status: **Phase 1** of `docs/PLAN.md` (file tree, tabs, editor with ProPra highlighting,
-atomic saving, file watching). Grammar checking (LanguageTool) is Phase 2.
+Status: Phases 1 to 3 of `docs/PLAN.md`: file tree, tabs, ProPra highlighting, atomic
+saving, file watching, offline grammar and spell checking with a bundled LanguageTool,
+structural lints and top matter assistance.
 
 ## Use
 
@@ -26,4 +27,7 @@ atomic saving, file watching). Grammar checking (LanguageTool) is Phase 2.
 | Cmd/Strg+N | Neue Aufgabe |
 | Strg+Tab | Nächster Tab |
 | Cmd/Strg+F | Suchen/Ersetzen |
+| Cmd/Strg+. | Schnellkorrektur an der Cursorposition |
+| Cmd/Strg+Shift+M | Problemliste |
+| F8 | Nächstes Problem |
 | Cmd/Strg+Alt+[ / ] | Block falten / entfalten |
