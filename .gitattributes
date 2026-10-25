@@ -1,0 +1,6 @@
+# Check out text files with LF everywhere (Windows runners default to CRLF), so tests see the
+# same bytes on every platform. The editor itself preserves whatever line endings a file has.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary

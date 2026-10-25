@@ -1,4 +1,5 @@
 pub mod config;
+pub mod includes;
 pub mod index;
 pub mod topmatter;
 

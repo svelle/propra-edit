@@ -169,7 +169,8 @@ describe("distribute: noise filters", () => {
 
 describe("masking performance", () => {
   it("masks and chunks a 1000-line task quickly", () => {
-    const body = readFileSync(join(FIXTURES, "ch/Basis/Shell/Shell-Pipes.md"), "utf8").split("---\n")[1];
+    const body = readFileSync(join(FIXTURES, "ch/Basis/Shell/Shell-Pipes.md"), "utf8").replace(/\r\n/g, "\n").split("---\n")[1];
+    expect(body?.includes("\n")).toBe(true);
     let text = "title: Groß\n---\n";
     while (text.split("\n").length < 1000) text += body;
     const state = EditorState.create({ doc: text, extensions: propraLanguage({ topMatter: true, cfg: { blockMacros: [{ name: "INSTRUCTOR", arity: 1 }, { name: "NOTICE", arity: 0 }] } }) });

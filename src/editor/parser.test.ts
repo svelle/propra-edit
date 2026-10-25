@@ -181,7 +181,8 @@ describe.skipIf(!PROPRA || !existsSync(join(PROPRA ?? "", "sedrila.yaml")))("gol
 
 describe("performance", () => {
   it("parses a 1000-line task well within the keystroke budget", () => {
-    const chunk = readFileSync(join(FIXTURES, "ch/Basis/Shell/Shell-Einstieg.md"), "utf8").split("---\n")[1];
+    const chunk = readFileSync(join(FIXTURES, "ch/Basis/Shell/Shell-Einstieg.md"), "utf8").replace(/\r\n/g, "\n").split("---\n")[1];
+    expect(chunk?.includes("\n")).toBe(true);
     let text = "title: Groß\ntimevalue: 1\ndifficulty: 2\n---\n";
     while (text.split("\n").length < 1000) text += chunk;
     parseProPra(text); // warm up

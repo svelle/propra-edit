@@ -265,6 +265,35 @@ fn start_languagetool(app: &AppHandle) {
     *app.state::<AppState>().lt.lock().unwrap() = Some(lt);
 }
 
+fn course_config(state: &AppState) -> Result<CourseConfig, String> {
+    let guard = state.course.lock().unwrap();
+    Ok(guard.as_ref().ok_or("Kein Kurs geöffnet")?.index.config.clone())
+}
+
+/// Resolve INCLUDE/PROT/SNIPPET/TREEREF arguments of `context` like sedrila and check them.
+#[tauri::command]
+async fn check_includes(
+    state: State<'_, AppState>,
+    context: String,
+    queries: Vec<course::includes::IncludeQuery>,
+) -> Result<Vec<course::includes::IncludeResult>, String> {
+    let cfg = course_config(&state)?;
+    let ctx = PathBuf::from(context);
+    Ok(queries.iter().map(|q| course::includes::check(&cfg, &ctx, q)).collect())
+}
+
+/// Directory entries for path completion inside INCLUDE/PROT/SNIPPET/TREEREF.
+#[tauri::command]
+async fn list_include_dir(
+    state: State<'_, AppState>,
+    context: String,
+    partial: String,
+    itree_mode: bool,
+) -> Result<Vec<course::includes::DirEntryInfo>, String> {
+    let cfg = course_config(&state)?;
+    Ok(course::includes::list_dir(&cfg, Path::new(&context), &partial, itree_mode))
+}
+
 /// Checks whether `dir` contains `sedrila.yaml` (used by the course picker).
 #[tauri::command]
 async fn is_course_root(dir: String) -> bool {
@@ -338,6 +367,8 @@ pub fn run() {
             path_exists,
             new_task_paths,
             is_course_root,
+            check_includes,
+            list_include_dir,
             lt_status,
             lt_restart,
             lt_check,

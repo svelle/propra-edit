@@ -1,0 +1,22 @@
+# Lint findings in a real propra-inf checkout (as of 2026-10-25). All are real content problems
+# or deliberate examples (Feedback tasks). The golden lint test fails only on findings NOT listed here.
+Basis/Paketverwaltung/apt101.md:184: eref-range: [EREFQ::4] verweist ins Leere: die Aufgabe hat 0 [EQ]
+Basis/Paketverwaltung/apt101.md:184: eref-range: [EREFQ::5] verweist ins Leere: die Aufgabe hat 0 [EQ]
+Bestandscode/Festpreisprojekt/OSS-Produkt-verbessern4.md:20: block-unclosed: [SECTION] wird nicht geschlossen
+Bibliotheken/Pandas/pd-Datenbereinigung.md:24: block-unclosed: [SECTION] wird nicht geschlossen
+Feedback/ProPra-Mängel/propra-Mängel-bei-Kommandoprotokollen.md:16: eref-range: [EREFC::1] verweist ins Leere: die Aufgabe hat 0 [EC]
+Feedback/ProPra-Mängel/propra-Mängel-bei-Kommandoprotokollen.md:16: eref-range: [EREFC::2] verweist ins Leere: die Aufgabe hat 0 [EC]
+Feedback/ProPra-Mängel/propra-Mängel-bei-Markdownabgaben.md:40: eref-range: [EREFQ::x] verweist ins Leere: die Aufgabe hat 7 [EQ]
+Programmierpraxis/Python-linkcheck/linkcheck-core.md:99: unknown-macro: Unbekanntes Makro [URL]
+Programmierpraxis/Python-linkcheck/linkcheck-core.md:113: unknown-macro: Unbekanntes Makro [URL]
+Programmierpraxis/Python-linkcheck/linkcheck-heuristics.md:22: block-unclosed: [SECTION] wird nicht geschlossen
+Programmierpraxis/Python-linkcheck/linkcheck-testbase.md:23: block-unclosed: [SECTION] wird nicht geschlossen
+Programmierpraxis/Python-mlh/mlh-linkcheck.md:19: block-unclosed: [SECTION] wird nicht geschlossen
+Sprachen/Python/py-List-Comprehensions.md:11: block-unclosed: [SECTION] wird nicht geschlossen
+Web/JavaScript/js-Eventhandling.md:25: block-unclosed: [SECTION] wird nicht geschlossen
+Werkzeuge/Benutzerverwaltung/Dateiberechtigungen.md:19: block-unclosed: [SECTION] wird nicht geschlossen
+Werkzeuge/Git/git-Anpassen.md:124: block-unmatched-end: [ENDINSTRUCTOR] ohne passendes [INSTRUCTOR]
+Werkzeuge/Git/git-Rebase.md:157: block-unmatched-end: [ENDINSTRUCTOR] ohne passendes [INSTRUCTOR]
+Werkzeuge/Git/git-Rebase.md:48: block-unclosed: [SECTION] wird nicht geschlossen
+Werkzeuge/Unix-Basiswerkzeuge/Shell-Grundlagen.md:31: block-unclosed: [SECTION] wird nicht geschlossen
+Werkzeuge/Unix-Basiswerkzeuge/Umgang-mit-Verzeichnissen.md:19: block-unclosed: [SECTION] wird nicht geschlossen

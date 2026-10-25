@@ -36,10 +36,36 @@ fn scalar_to_string(v: &Value) -> Option<String> {
     }
 }
 
+/// Line-based fallback for top matter that serde_yaml rejects (e.g. duplicate keys, which
+/// sedrila's PyYAML accepts with "last one wins").
+fn parse_lines(yaml: &str) -> TopMatter {
+    let mut tm = TopMatter::default();
+    for line in yaml.lines() {
+        let Some((k, v)) = line.split_once(':') else { continue };
+        if k.is_empty() || !k.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+            continue;
+        }
+        let mut v = v.trim();
+        if let Some(i) = v.find(" #") {
+            v = v[..i].trim();
+        }
+        let v = v.trim_matches(|c| c == '"' || c == '\'').to_string();
+        let opt = if v.is_empty() { None } else { Some(v.clone()) };
+        match k {
+            "title" => tm.title = opt,
+            "stage" => tm.stage = opt,
+            "difficulty" => tm.difficulty = opt,
+            "timevalue" => tm.timevalue = v.parse().ok(),
+            _ => {}
+        }
+    }
+    tm
+}
+
 pub fn parse(text: &str) -> TopMatter {
     let Some(yaml) = split(text) else { return TopMatter::default() };
     let Ok(Value::Mapping(map)) = serde_yaml::from_str::<Value>(yaml) else {
-        return TopMatter::default();
+        return parse_lines(yaml);
     };
     let get = |k: &str| map.get(Value::String(k.into()));
     TopMatter {
@@ -75,5 +101,13 @@ mod tests {
         assert_eq!(parse("---\nbody"), TopMatter::default());
         // A '----' line or '---' inside text does not count.
         assert_eq!(split("a: 1\n----\n"), None);
+    }
+
+    #[test]
+    fn duplicate_keys_fall_back_to_lines() {
+        let tm = parse("title: \"T\"\nstage: alpha\nstage: beta # x\ntimevalue: 2\n---\n");
+        assert_eq!(tm.title.as_deref(), Some("T"));
+        assert_eq!(tm.stage.as_deref(), Some("beta"));
+        assert_eq!(tm.timevalue, Some(2.0));
     }
 }

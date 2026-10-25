@@ -10,9 +10,11 @@ Ich kann [TERMREF2::Branch::-es] anlegen und wechseln.
 [ENDSECTION]
 
 [SECTION::background::default]
+
 [INNERSECTION::goal::idea]
 Ich verstehe, was ein Zweig ist.
 [ENDINNERSECTION]
+
 Ein Branch ist ein beweglicher Zeiger auf einen Commit.
 [ENDSECTION]
 

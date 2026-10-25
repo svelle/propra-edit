@@ -103,6 +103,10 @@ export const backend = {
   newTaskPaths: (chapter: string, taskgroup: string, name: string) =>
     invoke<NewTaskPaths>("new_task_paths", { chapter, taskgroup, name }),
   isCourseRoot: (dir: string) => invoke<boolean>("is_course_root", { dir }),
+  checkIncludes: (context: string, queries: { macroName: string; arg: string; snippet?: string }[]) =>
+    invoke<{ path: string | null; exists: boolean; treeMissing: boolean; snippetFound: boolean | null }[]>("check_includes", { context, queries }),
+  listIncludeDir: (context: string, partial: string, itreeMode: boolean) =>
+    invoke<{ name: string; isDir: boolean }[]>("list_include_dir", { context, partial, itreeMode }),
   ltStatus: () => invoke<LtStatus>("lt_status"),
   ltRestart: () => invoke<void>("lt_restart"),
   ltCheck: (data: string, disabledRules: string[], enabledRules: string[]) =>

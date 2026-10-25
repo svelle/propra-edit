@@ -3,7 +3,8 @@
 // quick fixes. Dictionary, ignore and rule settings are applied when rendering, so they take
 // effect immediately without re-checking.
 
-import { StateEffect, type Extension } from "@codemirror/state";
+import { type Extension } from "@codemirror/state";
+import { lintRefresh } from "../editor/refresh";
 import { EditorView, ViewPlugin } from "@codemirror/view";
 import { ensureSyntaxTree } from "@codemirror/language";
 import { forceLinting, linter, type Action, type Diagnostic } from "@codemirror/lint";
@@ -27,7 +28,7 @@ export interface GrammarDeps {
 }
 
 /** Dispatched when new results arrive or settings change; makes the linter run again. */
-export const grammarRefresh = StateEffect.define<null>();
+export const grammarRefresh = lintRefresh;
 
 const SEVERITY = { spelling: "error", grammar: "warning", style: "info" } as const;
 

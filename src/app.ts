@@ -8,6 +8,13 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { backend, events, type CourseIndex, type LtStatus, type TextFile } from "./backend";
 import { findPartByPath, hasTopMatter, openableItems, parserConfigFor, partNames } from "./course";
 import { GrammarService } from "./grammar/grammar";
+import { EditorSelection } from "@codemirror/state";
+import { diagnosticCount, forceLinting, openLintPanel } from "@codemirror/lint";
+import { lintRefresh } from "./editor/refresh";
+import { propraAssist } from "./lint/assist";
+import { propraEnv, type IncludeQuery, type PartRef, type PropraEnv, type TermRef } from "./lint/env";
+import { structuralLinter } from "./lint/extension";
+import type { FileKind, IncludeStatus } from "./lint/structural";
 import { createState, languageCompartment, loadOtherLanguage, wrapCompartment } from "./editor/setup";
 import { de } from "./i18n/de";
 import { FileTree } from "./panels/filetree";
@@ -56,6 +63,10 @@ export class App {
   private statusRight = h("span", { class: "status-right" });
   private statusLt = h("button", { class: "status-lt", title: de.grammar.restartHint });
   private grammar!: GrammarService;
+  private statusProblems = h("button", { class: "status-problems", title: de.problems.title });
+  private partMap: Map<string, PartRef> | null = null;
+  private glossaryMap: Map<string, TermRef> | null = null;
+  private includeCache = new Map<string, IncludeStatus>();
   private ltStatus: LtStatus = { state: "starting", message: null };
 
   async start(root: HTMLElement) {
@@ -144,7 +155,11 @@ export class App {
       resizer.addEventListener("pointerup", up, { once: true });
     });
     const main = h("main", { class: "main" }, this.tabBar, this.editorHost, this.welcome);
-    const status = h("footer", { class: "statusbar" }, this.statusLeft, this.statusPos, h("span", { class: "spacer" }), this.statusRight, this.statusLt);
+    this.statusProblems.addEventListener("click", () => {
+      openLintPanel(this.view);
+      this.view.focus();
+    });
+    const status = h("footer", { class: "statusbar" }, this.statusLeft, this.statusPos, this.statusProblems, h("span", { class: "spacer" }), this.statusRight, this.statusLt);
     root.replaceChildren(toolbar, h("div", { class: "workspace" }, sidebar, resizer, main), status);
   }
 
@@ -209,6 +224,20 @@ export class App {
 
   private setIndex(index: CourseIndex) {
     this.index = index;
+    this.includeCache.clear();
+    this.partMap = new Map();
+    const addPart = (p: { name: string; title: string | null; rel: string; path: string; kind: string }) => this.partMap!.set(p.name, { name: p.name, title: p.title, rel: p.rel, path: p.path, kind: p.kind });
+    for (const ch of index.chapters) {
+      addPart(ch.part);
+      ch.zipdirs.forEach(addPart);
+      for (const tg of ch.taskgroups) {
+        addPart(tg.part);
+        tg.tasks.forEach(addPart);
+        tg.zipdirs.forEach(addPart);
+      }
+    }
+    this.glossaryMap = new Map();
+    for (const t of index.glossaryTerms) for (const n of t.names) this.glossaryMap.set(n, { names: t.names, line: t.line, term0: t.term0 });
     this.grammar.setAcceptedNames([...partNames(index), ...index.glossaryTerms.flatMap((t) => t.names)]);
     this.tree.setIndex(index);
     this.tree.setActive(this.active?.path ?? null);
@@ -243,8 +272,65 @@ export class App {
       parserConfig: parserConfigFor(this.index),
       softWrap: this.settings.softWrap,
       extra: EditorView.updateListener.of((u: ViewUpdate) => this.onEditorUpdate(u)),
-      markdownExtra: [this.grammar.extension()],
+      markdownExtra: [propraEnv.of(this.makeEnv(tab.path)), structuralLinter(), propraAssist(), this.grammar.extension()],
     });
+  }
+
+  private fileKind(path: string): FileKind {
+    const index = this.index;
+    if (!index) return "other";
+    const part = findPartByPath(index, path);
+    if (part) return part.kind === "zipdir" ? "other" : part.kind;
+    if (index.glossary?.path === path) return "glossary";
+    if (index.includeFiles.some((f) => f.path === path)) return "include";
+    return "other";
+  }
+
+  private makeEnv(path: string): PropraEnv {
+    const rel = () => (this.index ? (openableItems(this.index).find((i) => i.path === path)?.rel ?? path) : path);
+    return {
+      path,
+      fileKind: this.fileKind(path),
+      stages: () => this.index?.config.stages ?? [],
+      sectionTypes: () => this.index?.config.sectionTypes ?? {},
+      parts: () => this.partMap,
+      glossary: () => this.glossaryMap,
+      glossaryPath: () => this.index?.glossary?.path ?? null,
+      checkIncludes: async (queries: IncludeQuery[]) => {
+        const key = (q: IncludeQuery) => `${path}|${q.macroName}|${q.arg}|${q.snippet ?? ""}`;
+        const missing = queries.filter((q) => !this.includeCache.has(key(q)));
+        if (missing.length) {
+          const res = await backend.checkIncludes(path, missing);
+          missing.forEach((q, i) => this.includeCache.set(key(q), res[i]));
+        }
+        return queries.map((q) => this.includeCache.get(key(q))!);
+      },
+      listDir: (partial, itree) => backend.listIncludeDir(path, partial, itree),
+      open: (p, line) => void this.openAt(p, line),
+      silenced: () => this.settings.silencedLints[rel()] ?? [],
+      silence: (id) => {
+        const r = rel();
+        const list = (this.settings.silencedLints[r] ??= []);
+        if (!list.includes(id)) list.push(id);
+        saveSettings(this.settings);
+        toast(de.lint.silenced(id));
+        this.refreshLints();
+      },
+    };
+  }
+
+  private refreshLints() {
+    this.view.dispatch({ effects: lintRefresh.of(null) });
+    forceLinting(this.view);
+  }
+
+  /** Open a file and put the cursor on a 0-based line. */
+  private async openAt(path: string, line?: number) {
+    const tab = await this.openFile(path);
+    if (!tab || line === undefined || tab !== this.active) return;
+    const l = this.view.state.doc.line(Math.min(line + 1, this.view.state.doc.lines));
+    this.view.dispatch({ selection: EditorSelection.cursor(l.from), effects: EditorView.scrollIntoView(l.from, { y: "start", yMargin: 60 }) });
+    this.view.focus();
   }
 
   async openFile(path: string, opts: { activate?: boolean; quiet?: boolean } = {}) {
@@ -391,6 +477,7 @@ export class App {
       }
     }
     if (u.selectionSet || u.docChanged) this.updateCursor();
+    this.updateProblems();
   }
 
   // ----- saving
@@ -463,6 +550,10 @@ export class App {
 
   private async onFilesChanged(paths: string[]) {
     const changed = new Set(paths);
+    if (this.includeCache.size) {
+      this.includeCache.clear();
+      this.refreshLints();
+    }
     for (const tab of this.tabs) {
       if (!changed.has(tab.path)) continue;
       if (tab === this.active) tab.state = this.view.state;
@@ -586,6 +677,15 @@ export class App {
     this.statusLt.textContent = ltLabel(st, this.settings.grammarEnabled, this.grammar.client.pending);
     this.statusLt.className = `status-lt lt-${st.state}`;
     this.statusLt.title = [st.message, de.grammar.restartHint].filter(Boolean).join("\n");
+  }
+
+  private lastProblemCount = -1;
+  private updateProblems() {
+    const n = this.active ? diagnosticCount(this.view.state) : 0;
+    if (n === this.lastProblemCount) return;
+    this.lastProblemCount = n;
+    this.statusProblems.textContent = n ? de.problems.count(n) : "";
+    this.statusProblems.hidden = n === 0;
   }
 
   private updateCursor() {

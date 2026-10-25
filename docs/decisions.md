@@ -184,3 +184,50 @@ Still to do: the same measurements on macOS and Windows (the user's machines).
   or top matter after the fixes above. Remaining hits are English technical words (to be
   handled by glossary and dictionary) and real findings, for example a stray „)“ in
   `Werkzeuge/Git/git-Funktionsweise.md` line 50.
+
+## Phase 3: structural lints and top matter assistance
+
+- **Lints** (`src/lint/structural.ts`) are a pure function of the ProPraDoc and a course
+  context; ids are stable and can be silenced per file (stored in settings by the file's
+  path relative to the course root). Ids: unknown-macro, macro-arity, glossary-only-macro,
+  block-unclosed, block-unmatched-end, block-misnested, block-not-alone, block-nesting,
+  section-type, section-subtype, termref-unknown, partref-unknown, include-missing,
+  snippet-missing, eref-range, topmatter-missing/-difficulty/-timevalue/-stage/-explains/
+  -explains-chapter/-assumes/-requires.
+- **Checked against real sedrila:** sedrila 3.2.0 (installed from source; the PyPI wheel
+  lacks its `templates/` directory and fails at the end of a build) was run over a copy of
+  propra-inf. Findings that shaped the rules:
+  - sedrila's "empty line before and after" warning only concerns block *starts* in the
+    middle of a Python-Markdown paragraph, and it fires zero times for propra-inf. Mirroring
+    Python-Markdown's paragraph rules (HTML comments, includes) produced 93 false positives,
+    so there is no such lint.
+  - Nesting a block in a block of the same kind is used on purpose (58 times `[HINT]` in
+    `[HINT]`) and renders fine. Only `[SECTION]` nesting and `[INNERSECTION]` outside a
+    `[SECTION]` are reported. Nesting under an unclosed block is not reported again.
+  - TERMREF targets must match a glossary name exactly (case-sensitive), PARTREF targets
+    a part name exactly.
+  - `[SNIPPET::ALT::name]`: for SNIPPET only, a bare `ALT`/`ITREE` means `ALT:`/`ITREE:`.
+  - Include resolution (`src-tauri/src/course/includes.rs`) mirrors `includefile_path`;
+    every non-altdir INCLUDE/PROT/SNIPPET/TREEREF in propra-inf resolves (Rust golden test).
+    When altdir/itreedir is missing, references into it are not reported.
+  - sedrila exits with code 0 even when it reports errors; Phase 7 must parse the final
+    `==== N errors` line instead of trusting the exit code.
+- **Golden result:** 20 findings over all of propra-inf, all real or deliberate:
+  11 unclosed `[SECTION]`, 2 stray `[ENDINSTRUCTOR]` (the opening call is split over two
+  lines), 2 × `set[URL]` in unprotected code, `[EREFQ::4]`/`[EREFQ::5]` in `apt101.md`
+  where the task only has `[EC]` (should be `[EREFC::…]`), and 3 generic examples in the
+  Feedback tasks. Listed in `test-fixtures/propra-inf-known-lints.txt`.
+- **Glossary order (for Phase 4):** sedrila warns when main terms are not sorted by
+  `term.replace('`', '').casefold()`, i.e. case-insensitive code-point order. Umlauts
+  therefore sort after „z“ (as in `glossary.md`: „Ü“ comes last).
+- **Top matter in the Rust index:** if serde_yaml rejects the top matter (e.g. a duplicate
+  key, which PyYAML accepts), a line-based fallback reads title/stage/difficulty/timevalue.
+- **Assistance:** completion for top matter keys and values (stage, difficulty, comma-aware
+  part names for assumes/requires, glossary names for explains), macro names after `[`,
+  PARTREF/TERMREF arguments, SECTION types and subtypes, EREF numbers, and paths inside
+  INCLUDE/PROT/SNIPPET/TREEREF (including `ALT:`, `ITREE:`, `/`). Hover shows a part's title
+  and path, a term's synonyms, or an include's resolved path; Cmd/Ctrl+click opens the part,
+  the glossary at the term, or the included file. TERMREF hover/click are a small preview of
+  Phase 4 (definition rendering and the side panel come there).
+- **Problems panel:** CodeMirror's lint panel (Cmd/Ctrl+Shift+M, F8 for the next problem),
+  plus a „⚠ N“ button in the status bar.
