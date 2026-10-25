@@ -13,6 +13,7 @@ export interface Settings {
   activeTab: string | null;
   treeExpanded: string[];
   sidebarWidth: number;
+  sidebarVisible: boolean;
   rightPanelWidth: number;
   previewVisible: boolean;
   previewWidth: number;
@@ -56,6 +57,7 @@ export const DEFAULT_SETTINGS: Settings = {
   activeTab: null,
   treeExpanded: [],
   sidebarWidth: 300,
+  sidebarVisible: true,
   rightPanelWidth: 380,
   previewVisible: false,
   previewWidth: 520,

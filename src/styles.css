@@ -627,3 +627,7 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
   border: 1px solid var(--border) !important; border-radius: 4px;
 }
 .cm-panel .cm-textfield { background: var(--bg) !important; color: var(--fg) !important; border: 1px solid var(--border) !important; }
+
+/* collapsed file tree: no sidebar, no resize handle */
+.sidebar[hidden], .sidebar[hidden] + .sidebar-resizer { display: none; }
+.toolbar .tool.toggle.icon-only[aria-pressed="true"]::before { content: none; }

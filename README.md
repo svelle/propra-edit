@@ -32,6 +32,7 @@ logs. „Alles kopieren“ copies both, ready to paste into a bug report.
 
 | Shortcut | Action |
 | --- | --- |
+| Cmd/Strg+Shift+E | Dateibaum ein-/ausblenden (oder ◧ links in der Werkzeugleiste) |
 | Cmd/Strg+P | Schnell öffnen |
 | Cmd/Strg+S | Speichern |
 | Cmd/Strg+W | Tab schließen |

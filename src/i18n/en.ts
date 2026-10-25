@@ -20,6 +20,7 @@ export const en: Strings = {
     save: "Save",
     quickOpen: "Quick open",
     settings: "Settings",
+    sidebarTitle: (key: string) => `Show/hide the file tree (${key})`,
   },
   welcome: {
     title: "Welcome to ProPra Editor",

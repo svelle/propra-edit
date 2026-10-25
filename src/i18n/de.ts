@@ -19,6 +19,7 @@ export const de = {
     save: "Speichern",
     quickOpen: "Schnell öffnen",
     settings: "Einstellungen",
+    sidebarTitle: (key: string) => `Dateibaum ein-/ausblenden (${key})`,
   },
   welcome: {
     title: "Willkommen im ProPra Editor",

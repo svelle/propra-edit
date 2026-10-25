@@ -106,6 +106,7 @@ export class App {
   private gitTimer: number | undefined;
   private toolbarSync: (() => void)[] = [];
   private saveBtn!: HTMLButtonElement;
+  private sidebar!: HTMLElement;
   private statusGit = h("button", { class: "status-git", hidden: true });
   private buildId = 0;
   private scrollToken = 0;
@@ -295,10 +296,16 @@ export class App {
       return b;
     };
     const sep = () => h("span", { class: "tool-sep", "aria-hidden": "true" });
+    const iconOnly = (b: HTMLButtonElement) => (b.classList.add("icon-only"), b);
+    const sidebar = h("aside", { class: "sidebar", hidden: !this.settings.sidebarVisible }, this.tree.dom);
+    sidebar.style.width = `${this.settings.sidebarWidth}px`;
+    this.sidebar = sidebar;
     this.saveBtn = btn(ui.toolbar.save, `${ui.toolbar.save} (${modKey()}+S)`, () => void this.saveActive());
     const toolbar = h(
       "header",
       { class: "toolbar" },
+      iconOnly(toggle("◧", ui.toolbar.sidebarTitle(`${modKey()}+Shift+E`), () => this.toggleSidebar(), () => !sidebar.hidden, sidebar)),
+      sep(),
       btn(ui.toolbar.openCourse, ui.toolbar.openCourse, () => void this.chooseCourse()),
       btn(ui.toolbar.newTask, `${ui.toolbar.newTask} (${modKey()}+N)`, () => void this.newTask()),
       this.saveBtn,
@@ -315,9 +322,7 @@ export class App {
       btn(ui.logs.toolbar, ui.logs.toolbarTitle, () => void this.showLogs("app")),
       btn("⚙", ui.toolbar.settings, () => void this.openSettings()),
     );
-    const sidebar = h("aside", { class: "sidebar" }, this.tree.dom);
-    sidebar.style.width = `${this.settings.sidebarWidth}px`;
-    const resizer = h("div", { class: "resizer" });
+    const resizer = h("div", { class: "resizer sidebar-resizer" });
     resizer.addEventListener("pointerdown", (e) => {
       resizer.setPointerCapture(e.pointerId);
       const startX = e.clientX;
@@ -778,6 +783,13 @@ export class App {
     this.scrollToken++;
     this.view.dispatch({ selection: loc ? EditorSelection.range(loc.from, loc.to) : EditorSelection.cursor(0), effects: EditorView.scrollIntoView(pos, { y: "center" }) });
     this.view.focus();
+  }
+
+  private toggleSidebar() {
+    this.sidebar.hidden = !this.sidebar.hidden;
+    this.settings.sidebarVisible = !this.sidebar.hidden;
+    saveSettings(this.settings);
+    this.view.requestMeasure();
   }
 
   private toggleGit() {
@@ -1298,6 +1310,7 @@ export class App {
         else if (key === "v" && e.shiftKey) this.togglePreview();
         else if (key === "b" && !e.shiftKey) void this.buildPanel.run();
         else if (key === "g" && e.shiftKey) this.toggleGit();
+        else if (key === "e" && e.shiftKey) this.toggleSidebar();
         else if (key === "d" && e.shiftKey && this.active) void this.diffFile(this.active.path, this.active.rel);
         else if (e.key === "Tab" && e.ctrlKey && this.tabs.length > 1 && this.active) {
           const i = this.tabs.indexOf(this.active);
