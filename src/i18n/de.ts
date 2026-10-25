@@ -147,6 +147,17 @@ export const de = {
     includeTarget: "Eingebundene Datei",
     includeMissing: "Datei fehlt",
   },
+  preview: {
+    title: "Vorschau",
+    toolbar: "Vorschau",
+    toolbarTitle: (key: string) => `Vorschau ein/aus (${key})`,
+    tutor: "Tutor-Ansicht",
+    tutorTitle: "[INSTRUCTOR]-Blöcke anzeigen",
+    nothing: "Keine Datei geöffnet.",
+    approximate: "Annähernde Vorschau. Die verbindliche Darstellung erzeugt sedrila (Build mit Cmd/Strg+B).",
+    unknownPart: (name: string) => `Unbekannter Part „${name}“`,
+    mermaidError: (msg: string) => `Mermaid-Diagramm fehlerhaft: ${msg}`,
+  },
   glossary: {
     title: "Glossar",
     search: "Begriff suchen …",

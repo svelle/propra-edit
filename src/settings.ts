@@ -9,6 +9,10 @@ export interface Settings {
   treeExpanded: string[];
   sidebarWidth: number;
   rightPanelWidth: number;
+  previewVisible: boolean;
+  previewWidth: number;
+  /** Preview shows [INSTRUCTOR] blocks. */
+  previewTutor: boolean;
   fontFamily: string;
   fontSize: number;
   softWrap: boolean;
@@ -33,6 +37,9 @@ export const DEFAULT_SETTINGS: Settings = {
   treeExpanded: [],
   sidebarWidth: 300,
   rightPanelWidth: 380,
+  previewVisible: false,
+  previewWidth: 520,
+  previewTutor: true,
   fontFamily: 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace',
   fontSize: 14,
   softWrap: true,

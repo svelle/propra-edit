@@ -295,12 +295,35 @@ Still to do: the same measurements on macOS and Windows (the user's machines).
 - **Open question decided by default:** solutions are shown only below the enumerations, not
   next to `[EREFx]` references in `[INSTRUCTOR]` text.
 
-## Phase 6 (in progress): preview groundwork
+## Phase 6: preview
 
-- `CourseConfig` now carries all `blockmacro_topmatter` templates and `baseresourcedir`;
-  `course_css` returns the course's `sedrila.css` + `local.css` so the preview can use the
-  course's own styling with sedrila's class names.
-- **mermaid 12.1.0** for diagram rendering (to be loaded lazily). Its dependency KaTeX
-  0.16.x has a low-severity advisory (GHSA-238p-pmpm-9mq7, prototype pollution); KaTeX is
-  pinned to the patched 0.18.11 (2026-10-01) via `overrides` in package.json, although
-  mermaid declares `^0.16.47`. KaTeX is only used for math inside diagrams.
+- **Renderer** (`src/preview/render.ts`) follows sedrila's two stages: `[INCLUDE]`/`[SNIPPET]`
+  insert raw text before Markdown (one level, so no cycles), every other macro becomes a
+  placeholder that is expanded in the rendered HTML with sedrila's markup (class names from
+  `framework/macroexpanders.py` and `course/glossary.py`) and sedrila's `<p>` fix-up for
+  block macros. Like sedrila's preprocessor, `<!-- @LINK_SPEC -->` comments are dropped and
+  `<replacement>` tags are removed (their content stays, as in author builds).
+- **Markdown dialect:** markdown-it (CommonMark) with `typographer` minus smart quotes
+  (≈ sedrila's `smarty` with `smart_quotes: False`). sedrila uses Python-Markdown, whose list
+  rules differ (indentation, lists directly after a paragraph). Checked against a real sedrila
+  build of propra-inf (instructor pages, structural signature: sections, enumerations, block
+  macros, term references, headings, list items): 292 of 351 files match; all 59 differences
+  are list-item counts. Emulating Python-Markdown's list rules made it worse, so it stays
+  CommonMark.
+- **Not reproduced:** code highlighting (codehilite), the assumes/requires box, glossary link
+  blocks ("explained by"), PROT specification checks, images with relative paths.
+- **Panel** (`src/panels/preview.ts`): shadow root with the course's `sedrila.css`,
+  `local.css` and `codehilite.css` (`:root`/`html`/`body` rewritten to the preview root).
+  Rendering is debounced (250 ms); the full propra-inf glossary (118 KB) renders in about
+  19 ms. Includes are resolved by the Rust core (same rules as the lints) and read from open
+  tabs and the inline solution document first, so unsaved text shows up. Scroll sync is
+  one-way (editor → preview) via `data-line` on block elements, interpolated between them;
+  double-click in the preview jumps the editor to that line. Links: PARTREF opens the part,
+  TERMREF the glossary panel, http(s) the browser.
+- **Tutor-Ansicht** only hides `[INSTRUCTOR]` blocks with CSS; sedrila's student build removes
+  them before numbering, so `[EQ]` inside an `[INSTRUCTOR]` would shift numbers there. Rare.
+- **mermaid 12.1.0**, loaded lazily on the first diagram; SVGs are cached by source text. Its
+  dependency KaTeX 0.16.x has a low-severity advisory (GHSA-238p-pmpm-9mq7, prototype
+  pollution); KaTeX is pinned to the patched 0.18.11 (2026-10-01) via `overrides` in
+  package.json, although mermaid declares `^0.16.47`.
+- Shortcut Cmd/Ctrl+Shift+V (as in VS Code's Markdown preview); F8 stays „Nächstes Problem“.

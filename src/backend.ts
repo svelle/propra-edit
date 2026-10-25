@@ -58,6 +58,9 @@ export interface CourseConfig {
   blockMacros: { name: string; arity: number }[];
   sectionTypes: Record<string, string[]>;
   chapters: { name: string; taskgroups: string[] }[];
+  /** All blockmacro_topmatter templates. */
+  topmatter: Record<string, string>;
+  baseresourcedir: string | null;
 }
 
 export interface CourseIndex {
@@ -112,6 +115,7 @@ export const backend = {
   ltRestart: () => invoke<void>("lt_restart"),
   ltCheck: (data: string, disabledRules: string[], enabledRules: string[]) =>
     invoke<string>("lt_check", { data, language: "de-DE", disabledRules, enabledRules }),
+  courseCss: () => invoke<string>("course_css"),
   getDictionary: () => invoke<string[]>("get_dictionary"),
   saveDictionary: (words: string[]) => invoke<void>("save_dictionary", { words }),
 };

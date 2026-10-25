@@ -282,13 +282,13 @@ async fn check_includes(
     Ok(queries.iter().map(|q| course::includes::check(&cfg, &ctx, q)).collect())
 }
 
-/// The course's own stylesheets (baseresourcedir/sedrila.css and local.css) for the preview.
+/// The course's own stylesheets (sedrila.css, local.css, codehilite.css from baseresourcedir) for the preview.
 #[tauri::command]
 async fn course_css(state: State<'_, AppState>) -> Result<String, String> {
     let cfg = course_config(&state)?;
     let Some(dir) = cfg.baseresourcedir else { return Ok(String::new()) };
     let mut css = String::new();
-    for name in ["sedrila.css", "local.css"] {
+    for name in ["sedrila.css", "local.css", "codehilite.css"] {
         if let Ok(t) = std::fs::read_to_string(dir.join(name)) {
             css.push_str(&t);
             css.push('\n');

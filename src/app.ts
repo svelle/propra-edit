@@ -14,6 +14,8 @@ import { embeddedEditorExtensions } from "./editor/setup";
 import { syncAnnotation } from "./editor/slice";
 import { glossaryTerms, termInsertion } from "./glossary/model";
 import { GlossaryPanel, type TermUsage } from "./panels/glossary-panel";
+import { PreviewPanel } from "./panels/preview";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { altdirField, altdirLoad, altdirStateExtension, type AltdirDoc, type RenumberPlan } from "./altdir/state";
 import { altdirViewExtension, setSolutionsVisible, type AltdirEnv } from "./altdir/widgets";
 import { applyChanges, type TextChange } from "./altdir/segments";
@@ -88,6 +90,8 @@ export class App {
   private includeCache = new Map<string, IncludeStatus>();
   private ltStatus: LtStatus = { state: "starting", message: null };
   private glossaryPanel!: GlossaryPanel;
+  private preview!: PreviewPanel;
+  private diskTextCache = new Map<string, string | null>();
   private glossaryDiskText: string | null = null;
   private glossaryTimer: number | undefined;
   private usagesCache: Promise<TermUsage[]> | null = null;
@@ -152,6 +156,48 @@ export class App {
       },
       closed: () => this.view.focus(),
     });
+    this.preview = new PreviewPanel({
+      source: () => {
+        const tab = this.active;
+        if (!tab || !tab.path.toLowerCase().endsWith(".md")) return null;
+        const text = this.view.state.doc.toString();
+        return { path: tab.path, text, topMatter: hasTopMatter(this.index, tab.path, text) };
+      },
+      parserConfig: () => parserConfigFor(this.index),
+      templates: () => this.index?.config.topmatter ?? {},
+      courseCss: () => backend.courseCss(),
+      resolve: async (path, calls) => {
+        const res = await this.checkIncludesCached(
+          path,
+          calls.map((c) => ({ macroName: c.name, arg: c.args[0] ?? "", snippet: c.name === "SNIPPET" ? c.args[1] : undefined })),
+        );
+        return res.map((r) => (r.exists ? r.path : null));
+      },
+      readText: (p) => this.liveText(p),
+      openPart: (name) => {
+        const part = this.partMap?.get(name);
+        if (part) void this.openFile(part.path);
+        else toast(de.preview.unknownPart(name), "error");
+      },
+      openTerm: (name) => void this.openTerm(name),
+      openUrl: (url) => void openUrl(url).catch((e) => toast(String(e), "error")),
+      revealLine: (line) => {
+        const l = this.view.state.doc.line(Math.min(line + 1, this.view.state.doc.lines));
+        this.view.dispatch({ selection: EditorSelection.cursor(l.from), effects: EditorView.scrollIntoView(l.from, { y: "start", yMargin: 60 }) });
+        this.view.focus();
+      },
+      tutorView: this.settings.previewTutor,
+      setTutorView: (on) => {
+        this.settings.previewTutor = on;
+        saveSettings(this.settings);
+      },
+      closed: () => {
+        this.settings.previewVisible = false;
+        saveSettings(this.settings);
+        this.view.focus();
+      },
+    });
+    this.view.scrollDOM.addEventListener("scroll", () => this.syncPreview(), { passive: true });
     this.buildLayout(root);
     this.bindGlobalKeys();
     await this.bindBackendEvents();
@@ -161,6 +207,7 @@ export class App {
     if (this.settings.courseRoot) {
       const ok = await this.loadCourse(this.settings.courseRoot, false);
       if (ok) await this.restoreTabs();
+      if (ok && this.settings.previewVisible) void this.preview.show();
     } else {
       this.showWelcome();
     }
@@ -179,6 +226,7 @@ export class App {
       btn(de.toolbar.quickOpen, `${de.toolbar.quickOpen} (${modKey()}+P)`, () => this.quickOpen()),
       btn(de.glossary.toolbar, de.glossary.toolbarTitle, () => void this.toggleGlossary()),
       btn(de.altdir.toolbar, de.altdir.toolbarTitle, () => this.toggleSolutions()),
+      btn(de.preview.toolbar, de.preview.toolbarTitle(`${modKey()}+Shift+V`), () => this.togglePreview()),
       h("span", { class: "spacer" }),
       btn("⚙", de.toolbar.settings, () => void this.openSettings()),
     );
@@ -224,7 +272,28 @@ export class App {
         { once: true },
       );
     });
-    root.replaceChildren(toolbar, h("div", { class: "workspace" }, sidebar, resizer, main, rightResizer, panel), status);
+    const pv = this.preview.dom;
+    pv.style.width = `${this.settings.previewWidth}px`;
+    const pvResizer = h("div", { class: "resizer" });
+    pvResizer.addEventListener("pointerdown", (e) => {
+      if (pv.hidden) return;
+      pvResizer.setPointerCapture(e.pointerId);
+      const startX = e.clientX;
+      const startW = pv.offsetWidth;
+      const move = (ev: PointerEvent) => (pv.style.width = `${Math.max(280, Math.min(1400, startW - (ev.clientX - startX)))}px`);
+      pvResizer.addEventListener("pointermove", move);
+      pvResizer.addEventListener(
+        "pointerup",
+        () => {
+          pvResizer.removeEventListener("pointermove", move);
+          this.settings.previewWidth = pv.offsetWidth;
+          saveSettings(this.settings);
+          this.syncPreview();
+        },
+        { once: true },
+      );
+    });
+    root.replaceChildren(toolbar, h("div", { class: "workspace" }, sidebar, resizer, main, pvResizer, pv, rightResizer, panel), status);
   }
 
   private applyFontSettings() {
@@ -289,6 +358,7 @@ export class App {
   private setIndex(index: CourseIndex) {
     this.index = index;
     this.includeCache.clear();
+    this.diskTextCache.clear();
     this.partMap = new Map();
     const addPart = (p: { name: string; title: string | null; rel: string; path: string; kind: string }) => this.partMap!.set(p.name, { name: p.name, title: p.title, rel: p.rel, path: p.path, kind: p.kind });
     for (const ch of index.chapters) {
@@ -508,15 +578,7 @@ export class App {
       parts: () => this.partMap,
       glossary: () => this.glossaryMap,
       glossaryPath: () => this.index?.glossary?.path ?? null,
-      checkIncludes: async (queries: IncludeQuery[]) => {
-        const key = (q: IncludeQuery) => `${path}|${q.macroName}|${q.arg}|${q.snippet ?? ""}`;
-        const missing = queries.filter((q) => !this.includeCache.has(key(q)));
-        if (missing.length) {
-          const res = await backend.checkIncludes(path, missing);
-          missing.forEach((q, i) => this.includeCache.set(key(q), res[i]));
-        }
-        return queries.map((q) => this.includeCache.get(key(q))!);
-      },
+      checkIncludes: (queries: IncludeQuery[]) => this.checkIncludesCached(path, queries),
       listDir: (partial, itree) => backend.listIncludeDir(path, partial, itree),
       open: (p, line) => void this.openAt(p, line),
       openTerm: (name) => void this.openTerm(name),
@@ -531,6 +593,45 @@ export class App {
         this.refreshLints();
       },
     };
+  }
+
+  private async checkIncludesCached(path: string, queries: IncludeQuery[]): Promise<IncludeStatus[]> {
+    const key = (q: IncludeQuery) => `${path}|${q.macroName}|${q.arg}|${q.snippet ?? ""}`;
+    const missing = queries.filter((q) => !this.includeCache.has(key(q)));
+    if (missing.length) {
+      const res = await backend.checkIncludes(path, missing);
+      missing.forEach((q, i) => this.includeCache.set(key(q), res[i]));
+    }
+    return queries.map((q) => this.includeCache.get(key(q))!);
+  }
+
+  /** Text of a file as the user sees it: open tabs and inline solutions win over disk. */
+  private async liveText(path: string): Promise<string | null> {
+    for (const tab of this.tabs) {
+      const state = tab === this.active ? this.view.state : tab.state;
+      if (tab.path === path) return state.doc.toString();
+      const alt = tab.alt?.path === path ? state.field(altdirField, false) : null;
+      if (alt) return alt.doc.toString();
+    }
+    if (!this.diskTextCache.has(path)) this.diskTextCache.set(path, await backend.readTextFile(path).then((f) => f.text, () => null));
+    return this.diskTextCache.get(path) ?? null;
+  }
+
+  private togglePreview() {
+    if (this.preview.visible) this.preview.hide();
+    else {
+      this.settings.previewVisible = true;
+      saveSettings(this.settings);
+      void this.preview.show().then(() => this.syncPreview());
+    }
+  }
+
+  private syncPreview() {
+    if (!this.preview.visible || !this.active) return;
+    const sd = this.view.scrollDOM;
+    const block = this.view.lineBlockAtHeight(sd.scrollTop);
+    const atEnd = sd.scrollTop > 0 && sd.scrollTop + sd.clientHeight >= sd.scrollHeight - 2;
+    this.preview.syncTo(atEnd ? Infinity : this.view.state.doc.lineAt(block.from).number - 1);
   }
 
   private refreshLints() {
@@ -616,7 +717,11 @@ export class App {
       tab.wrap = this.settings.softWrap;
     }
     this.view.setState(tab.state);
-    requestAnimationFrame(() => (this.view.scrollDOM.scrollTop = tab.scrollTop));
+    requestAnimationFrame(() => {
+      this.view.scrollDOM.scrollTop = tab.scrollTop;
+      this.syncPreview();
+    });
+    this.preview.update(0);
     this.updateMainVisibility();
     this.renderTabs();
     this.updateStatus();
@@ -652,6 +757,7 @@ export class App {
       if (next) this.activate(next);
       else {
         this.view.setState(EditorState.create({ doc: "" }));
+        this.preview.update(0);
         this.tree.setActive(null);
         this.updateMainVisibility();
       }
@@ -706,6 +812,7 @@ export class App {
       }
     }
     if (u.selectionSet || u.docChanged) this.updateCursor();
+    if (u.docChanged || u.transactions.some((t) => t.effects.length)) this.preview.update();
     this.updateProblems();
   }
 
@@ -804,6 +911,8 @@ export class App {
   private async onFilesChanged(paths: string[]) {
     const changed = new Set(paths);
     this.usagesCache = null;
+    for (const p of paths) this.diskTextCache.delete(p);
+    this.preview.invalidate();
     const gp = this.index?.glossary?.path;
     if (gp && changed.has(gp) && !this.glossaryTab()) void this.loadGlossaryFromDisk();
     for (const tab of this.tabs) if (tab.alt && changed.has(tab.alt.path)) await this.onAltdirChanged(tab);
@@ -952,6 +1061,7 @@ export class App {
         else if (key === "w" && !e.shiftKey) this.active && void this.closeTab(this.active);
         else if (key === "n" && !e.shiftKey) void this.newTask();
         else if (key === "l" && e.shiftKey) this.toggleSolutions();
+        else if (key === "v" && e.shiftKey) this.togglePreview();
         else if (e.key === "Tab" && e.ctrlKey && this.tabs.length > 1 && this.active) {
           const i = this.tabs.indexOf(this.active);
           this.activate(this.tabs[(i + (e.shiftKey ? -1 : 1) + this.tabs.length) % this.tabs.length]);
@@ -1017,7 +1127,7 @@ function modKey() {
 
 function emptyIndex(): CourseIndex {
   return {
-    config: { root: "", chapterdir: "", altdir: null, itreedir: null, stages: [], blockMacros: [], sectionTypes: {}, chapters: [] },
+    config: { root: "", chapterdir: "", altdir: null, itreedir: null, stages: [], blockMacros: [], sectionTypes: {}, chapters: [], topmatter: {}, baseresourcedir: null },
     chapters: [],
     glossary: null,
     glossaryTerms: [],
