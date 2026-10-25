@@ -28,7 +28,8 @@
     "@tauri-apps/api": "2.12.3",
     "@tauri-apps/plugin-dialog": "2.8.2",
     "@tauri-apps/plugin-opener": "2.7.1",
-    "markdown-it": "15.0.3"
+    "markdown-it": "15.0.3",
+    "mermaid": "12.1.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.12.2",
@@ -36,5 +37,8 @@
     "typescript": "7.0.2",
     "vite": "8.3.4",
     "vitest": "5.0.3"
+  },
+  "overrides": {
+    "katex": "0.18.11"
   }
 }

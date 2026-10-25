@@ -282,6 +282,21 @@ async fn check_includes(
     Ok(queries.iter().map(|q| course::includes::check(&cfg, &ctx, q)).collect())
 }
 
+/// The course's own stylesheets (baseresourcedir/sedrila.css and local.css) for the preview.
+#[tauri::command]
+async fn course_css(state: State<'_, AppState>) -> Result<String, String> {
+    let cfg = course_config(&state)?;
+    let Some(dir) = cfg.baseresourcedir else { return Ok(String::new()) };
+    let mut css = String::new();
+    for name in ["sedrila.css", "local.css"] {
+        if let Ok(t) = std::fs::read_to_string(dir.join(name)) {
+            css.push_str(&t);
+            css.push('\n');
+        }
+    }
+    Ok(css)
+}
+
 /// All glossary term references in the course ("Wo verwendet?").
 #[tauri::command]
 async fn term_usages(state: State<'_, AppState>) -> Result<Vec<course::usages::TermUsage>, String> {
@@ -376,6 +391,7 @@ pub fn run() {
             is_course_root,
             check_includes,
             term_usages,
+            course_css,
             list_include_dir,
             lt_status,
             lt_restart,

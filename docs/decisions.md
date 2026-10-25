@@ -294,3 +294,13 @@ Still to do: the same measurements on macOS and Windows (the user's machines).
 - **Toggle:** toolbar „Lösungen“ or Cmd/Ctrl+Shift+L; collapsed boxes are remembered per file.
 - **Open question decided by default:** solutions are shown only below the enumerations, not
   next to `[EREFx]` references in `[INSTRUCTOR]` text.
+
+## Phase 6 (in progress): preview groundwork
+
+- `CourseConfig` now carries all `blockmacro_topmatter` templates and `baseresourcedir`;
+  `course_css` returns the course's `sedrila.css` + `local.css` so the preview can use the
+  course's own styling with sedrila's class names.
+- **mermaid 12.1.0** for diagram rendering (to be loaded lazily). Its dependency KaTeX
+  0.16.x has a low-severity advisory (GHSA-238p-pmpm-9mq7, prototype pollution); KaTeX is
+  pinned to the patched 0.18.11 (2026-10-01) via `overrides` in package.json, although
+  mermaid declares `^0.16.47`. KaTeX is only used for math inside diagrams.

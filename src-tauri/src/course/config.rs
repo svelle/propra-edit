@@ -38,6 +38,9 @@ pub struct CourseConfig {
     /// Section type -> allowed subtypes, from the `section_<type>_<subtype>` keys.
     pub section_types: BTreeMap<String, Vec<String>>,
     pub chapters: Vec<ChapterConfig>,
+    /** All `blockmacro_topmatter` templates (section headings, hint text, user block macros). */
+    pub topmatter: BTreeMap<String, String>,
+    pub baseresourcedir: Option<PathBuf>,
 }
 
 fn get_str(map: &serde_yaml::Mapping, key: &str) -> Option<String> {
@@ -87,12 +90,14 @@ impl CourseConfig {
             _ => vec![],
         };
 
+        let mut topmatter = BTreeMap::new();
         let mut block_macros = Vec::new();
         let mut section_types: BTreeMap<String, Vec<String>> = BTreeMap::new();
         if let Some(Value::Mapping(bm)) = map.get(Value::String("blockmacro_topmatter".into())) {
             for (k, v) in bm {
                 let Some(key) = k.as_str() else { continue };
                 let tmpl = v.as_str().unwrap_or("");
+                topmatter.insert(key.to_string(), tmpl.to_string());
                 if !key.is_empty() && key.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_') {
                     let arity = if tmpl.contains("{arg2}") {
                         2
@@ -142,6 +147,8 @@ impl CourseConfig {
             block_macros,
             section_types,
             chapters,
+            topmatter,
+            baseresourcedir: get_str(map, "baseresourcedir").map(|s| join_rel(root, &s)),
         })
     }
 }
@@ -167,6 +174,8 @@ mod tests {
         assert_eq!(cfg.section_types["goal"], vec!["product", "idea", "experience", "trial"]);
         assert_eq!(cfg.section_types["background"], vec!["default"]);
         assert!(!cfg.section_types.contains_key("hint"));
+        assert_eq!(cfg.topmatter["section_goal"], "<h2>Ziel</h2>");
+        assert_eq!(cfg.topmatter["INSTRUCTOR"], "<h2>Kontrolle Tutor_in: {arg1}</h2>");
     }
 
     #[test]
