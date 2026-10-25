@@ -6,6 +6,7 @@ pub mod build;
 pub mod course;
 pub mod fs;
 pub mod git;
+pub mod i18n;
 pub mod lt;
 pub mod settings;
 pub mod watcher;
@@ -32,7 +33,7 @@ struct AppState {
 }
 
 fn lt_handle(state: &AppState) -> Result<lt::LanguageTool, String> {
-    state.lt.lock().unwrap().clone().ok_or_else(|| "LanguageTool ist nicht initialisiert".to_string())
+    state.lt.lock().unwrap().clone().ok_or_else(|| i18n::tr("LanguageTool ist nicht initialisiert", "LanguageTool is not initialized"))
 }
 
 fn settings_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -61,12 +62,12 @@ fn canonical_lenient(path: &Path) -> Option<PathBuf> {
 fn checked_path(state: &AppState, path: &str) -> Result<PathBuf, String> {
     let p = PathBuf::from(path);
     let guard = state.course.lock().unwrap();
-    let course = guard.as_ref().ok_or("Kein Kurs geöffnet")?;
-    let c = canonical_lenient(&p).ok_or_else(|| format!("Ungültiger Pfad: {path}"))?;
+    let course = guard.as_ref().ok_or_else(|| i18n::tr("Kein Kurs geöffnet", "No course open"))?;
+    let c = canonical_lenient(&p).ok_or_else(|| format!("{}: {path}", i18n::tr("Ungültiger Pfad", "Invalid path")))?;
     if c.starts_with(&course.canonical_root) {
         Ok(p)
     } else {
-        Err(format!("Pfad liegt außerhalb des Kurses: {path}"))
+        Err(format!("{}: {path}", i18n::tr("Pfad liegt außerhalb des Kurses", "Path is outside the course")))
     }
 }
 
@@ -139,7 +140,7 @@ async fn open_course(app: AppHandle, state: State<'_, AppState>, root: String) -
 #[tauri::command]
 async fn refresh_index(state: State<'_, AppState>) -> Result<CourseIndex, String> {
     let mut guard = state.course.lock().unwrap();
-    let c = guard.as_mut().ok_or("Kein Kurs geöffnet")?;
+    let c = guard.as_mut().ok_or_else(|| i18n::tr("Kein Kurs geöffnet", "No course open"))?;
     c.index = CourseIndex::build(CourseConfig::load(&c.root)?);
     Ok(c.index.clone())
 }
@@ -189,7 +190,7 @@ async fn new_task_paths(
     name: String,
 ) -> Result<NewTaskPaths, String> {
     let guard = state.course.lock().unwrap();
-    let c = guard.as_ref().ok_or("Kein Kurs geöffnet")?;
+    let c = guard.as_ref().ok_or_else(|| i18n::tr("Kein Kurs geöffnet", "No course open"))?;
     let cfg = &c.index.config;
     let file = format!("{name}.md");
     Ok(NewTaskPaths {
@@ -232,7 +233,7 @@ fn git_repos(app: &AppHandle, state: &AppState) -> Result<(String, CourseConfig,
 /// The repo with this root (only the course and altdir repos may be operated on).
 fn git_repo(app: &AppHandle, state: &AppState, root: &str) -> Result<(String, git::Repo), String> {
     let (prog, _, repos) = git_repos(app, state)?;
-    let repo = repos.into_iter().find(|r| r.root == Path::new(root)).ok_or_else(|| format!("Unbekanntes Repository: {root}"))?;
+    let repo = repos.into_iter().find(|r| r.root == Path::new(root)).ok_or_else(|| format!("{}: {root}", i18n::tr("Unbekanntes Repository", "Unknown repository")))?;
     Ok((prog, repo))
 }
 
@@ -330,12 +331,18 @@ async fn read_logs(app: AppHandle) -> LogInfo {
     }
 }
 
+/// Set the language of backend messages (called by the frontend at start-up).
+#[tauri::command]
+fn set_ui_language(lang: String) {
+    i18n::set_language(&lang);
+}
+
 /// Open the log directory in Finder/Explorer.
 #[tauri::command]
 fn open_log_dir(app: AppHandle) -> Result<(), String> {
     let dir = log_dir(&app);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| format!("Ordner konnte nicht geöffnet werden ({}): {e}", dir.display()))
+    tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| format!("{} ({}): {e}", i18n::tr("Ordner konnte nicht geöffnet werden", "Could not open the folder"), dir.display()))
 }
 
 /// Errors from the frontend (uncaught exceptions, error toasts) go into the app log too.
@@ -387,6 +394,12 @@ fn lt_location(app: &AppHandle) -> Result<lt::LtLocation, String> {
     lt::locate(resources.as_deref(), path_setting("ltJava"), path_setting("ltLibDir"))
 }
 
+/// The UI language stored in the settings ("uiLanguage"), for backend messages.
+fn language_from_settings(app: &AppHandle) {
+    let cfg = settings_dir(app).map(|d| settings::load(&d)).unwrap_or_default();
+    i18n::set_language(cfg.get("uiLanguage").and_then(|v| v.as_str()).unwrap_or("de"));
+}
+
 /// Directory for propra-editor.log and languagetool.log.
 fn log_dir(app: &AppHandle) -> PathBuf {
     app.path()
@@ -416,7 +429,7 @@ fn start_languagetool(app: &AppHandle) {
 
 fn course_config(state: &AppState) -> Result<CourseConfig, String> {
     let guard = state.course.lock().unwrap();
-    Ok(guard.as_ref().ok_or("Kein Kurs geöffnet")?.index.config.clone())
+    Ok(guard.as_ref().ok_or_else(|| i18n::tr("Kein Kurs geöffnet", "No course open"))?.index.config.clone())
 }
 
 /// Resolve INCLUDE/PROT/SNIPPET/TREEREF arguments of `context` like sedrila and check them.
@@ -525,8 +538,14 @@ async fn sedrila_test(state: State<'_, AppState>, command: String) -> Result<Str
 fn open_built_page(app: AppHandle, outdir: String, name: String) -> Result<String, String> {
     let out = build_outdir(&app, &outdir)?;
     let candidates = [out.join("instructor").join(format!("{name}.html")), out.join(format!("{name}.html"))];
-    let page = candidates.iter().find(|p| p.exists()).ok_or_else(|| format!("Keine gebaute Seite für „{name}“ in {}", out.display()))?;
-    tauri_plugin_opener::open_path(page, None::<&str>).map_err(|e| format!("Browser konnte nicht gestartet werden: {e}"))?;
+    let page = candidates.iter().find(|p| p.exists()).ok_or_else(|| {
+        if i18n::is_english() {
+            format!("No built page for “{name}” in {}", out.display())
+        } else {
+            format!("Keine gebaute Seite für „{name}“ in {}", out.display())
+        }
+    })?;
+    tauri_plugin_opener::open_path(page, None::<&str>).map_err(|e| format!("{}: {e}", i18n::tr("Browser konnte nicht gestartet werden", "Could not start the browser")))?;
     Ok(page.to_string_lossy().into_owned())
 }
 
@@ -561,7 +580,8 @@ async fn is_course_root(dir: String) -> bool {
 #[cfg(target_os = "macos")]
 fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
-    let quit = MenuItem::with_id(app, "quit", "ProPra Editor beenden", true, Some("CmdOrCtrl+Q"))?;
+    language_from_settings(app); // the menu is built before setup runs
+    let quit = MenuItem::with_id(app, "quit", i18n::tr("ProPra Editor beenden", "Quit ProPra Editor"), true, Some("CmdOrCtrl+Q"))?;
     let app_menu = Submenu::with_items(
         app,
         "ProPra Editor",
@@ -578,7 +598,7 @@ fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     )?;
     let edit = Submenu::with_items(
         app,
-        "Bearbeiten",
+        i18n::tr("Bearbeiten", "Edit"),
         true,
         &[
             &PredefinedMenuItem::cut(app, None)?,
@@ -589,7 +609,7 @@ fn macos_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     )?;
     let window = Submenu::with_items(
         app,
-        "Fenster",
+        i18n::tr("Fenster", "Window"),
         true,
         &[&PredefinedMenuItem::minimize(app, None)?, &PredefinedMenuItem::fullscreen(app, None)?],
     )?;
@@ -628,6 +648,7 @@ pub fn run() {
             build_default_outdir,
             course_path,
             read_logs,
+            set_ui_language,
             git_status,
             git_stage,
             git_unstage,
@@ -649,6 +670,7 @@ pub fn run() {
             save_dictionary,
         ])
         .setup(|app| {
+            language_from_settings(app.handle());
             let dir = log_dir(app.handle());
             applog::init(&dir);
             applog::info(format!(

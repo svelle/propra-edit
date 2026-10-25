@@ -3,7 +3,7 @@
 
 import { EditorSelection, type Extension } from "@codemirror/state";
 import { EditorView, showPanel, type Panel } from "@codemirror/view";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import type { ProPraDoc } from "./parser";
 import { propraDoc } from "./propra-language";
 
@@ -59,7 +59,7 @@ export function headerAt(doc: ProPraDoc, line: number): HeaderInfo | null {
 }
 
 export function headerLabel(h: HeaderInfo): string {
-  const parts = [h.section ? (de.editor.sectionNames[h.section as keyof typeof de.editor.sectionNames] ?? h.section) : null, h.heading, h.block];
+  const parts = [h.section ? (ui.editor.sectionNames[h.section as keyof typeof ui.editor.sectionNames] ?? h.section) : null, h.heading, h.block];
   return parts.filter(Boolean).join("  ·  ");
 }
 
@@ -84,7 +84,7 @@ function headerPanel(view: EditorView): Panel {
     const title = doc?.topMatter?.entries.find((e) => e.key === "title")?.value.replace(/^["']|["']$/g, "") ?? "";
     dom.textContent = show ? headerLabel(info) : title;
     dom.className = `cm-section-header${show ? "" : " empty"}${show && info.section ? ` cm-pm-sec-${info.section}` : ""}`;
-    dom.title = show ? de.editor.sectionHeaderTitle : "";
+    dom.title = show ? ui.editor.sectionHeaderTitle : "";
     target = show ? info.line : -1;
   };
   const schedule = () => {

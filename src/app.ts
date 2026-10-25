@@ -34,7 +34,7 @@ import { propraEnv, type IncludeQuery, type PartRef, type PropraEnv, type TermRe
 import { structuralLinter } from "./lint/extension";
 import type { FileKind, IncludeStatus } from "./lint/structural";
 import { createState, languageCompartment, loadOtherLanguage, wrapCompartment } from "./editor/setup";
-import { de } from "./i18n/de";
+import { ui } from "./i18n";
 import { FileTree } from "./panels/filetree";
 import { newTaskDialog } from "./panels/newtask";
 import { quickOpen } from "./panels/quickopen";
@@ -92,9 +92,9 @@ export class App {
   private statusLeft = h("span", { class: "status-left" }, h("span", { class: "status-path" }, this.statusPath), this.statusFile);
   private statusPos = h("span", { class: "status-pos" });
   private statusRight = h("span", { class: "status-right" });
-  private statusLt = h("button", { class: "status-lt", title: de.logs.statusHint });
+  private statusLt = h("button", { class: "status-lt", title: ui.logs.statusHint });
   private grammar!: GrammarService;
-  private statusProblems = h("button", { class: "status-problems", title: de.problems.title });
+  private statusProblems = h("button", { class: "status-problems", title: ui.problems.title });
   private partMap: Map<string, PartRef> | null = null;
   private glossaryMap: Map<string, TermRef> | null = null;
   private includeCache = new Map<string, IncludeStatus>();
@@ -192,7 +192,7 @@ export class App {
       openPart: (name) => {
         const part = this.partMap?.get(name);
         if (part) void this.openFile(part.path);
-        else toast(de.preview.unknownPart(name), "error");
+        else toast(ui.preview.unknownPart(name), "error");
       },
       openTerm: (name) => void this.openTerm(name),
       openUrl: (url) => void openUrl(url).catch((e) => toast(String(e), "error")),
@@ -230,7 +230,7 @@ export class App {
     window.addEventListener("focus", () => this.scheduleGitRefresh(100));
     this.buildPanel = new BuildPanel({
       start: async () => {
-        if (!this.index) throw new Error(de.build.noCourse);
+        if (!this.index) throw new Error(ui.build.noCourse);
         await this.saveAllDirty();
         this.buildId = -1; // accept output that arrives before the id is known
         const [id, cmd] = await backend.buildStart(this.settings.buildCommand, this.settings.buildOutDir);
@@ -241,9 +241,9 @@ export class App {
       canOpenPage: () => !!this.activePartName(),
       openPage: () => {
         const name = this.activePartName();
-        if (!name) return toast(de.build.noPart, "error");
+        if (!name) return toast(ui.build.noPart, "error");
         backend.openBuiltPage(this.settings.buildOutDir, name).then(
-          (p) => toast(de.build.pageOpened(p)),
+          (p) => toast(ui.build.pageOpened(p)),
           (e) => toast(String(e), "error"),
         );
       },
@@ -295,25 +295,25 @@ export class App {
       return b;
     };
     const sep = () => h("span", { class: "tool-sep", "aria-hidden": "true" });
-    this.saveBtn = btn(de.toolbar.save, `${de.toolbar.save} (${modKey()}+S)`, () => void this.saveActive());
+    this.saveBtn = btn(ui.toolbar.save, `${ui.toolbar.save} (${modKey()}+S)`, () => void this.saveActive());
     const toolbar = h(
       "header",
       { class: "toolbar" },
-      btn(de.toolbar.openCourse, de.toolbar.openCourse, () => void this.chooseCourse()),
-      btn(de.toolbar.newTask, `${de.toolbar.newTask} (${modKey()}+N)`, () => void this.newTask()),
+      btn(ui.toolbar.openCourse, ui.toolbar.openCourse, () => void this.chooseCourse()),
+      btn(ui.toolbar.newTask, `${ui.toolbar.newTask} (${modKey()}+N)`, () => void this.newTask()),
       this.saveBtn,
       sep(),
-      btn(de.toolbar.quickOpen, `${de.toolbar.quickOpen} (${modKey()}+P)`, () => this.quickOpen()),
+      btn(ui.toolbar.quickOpen, `${ui.toolbar.quickOpen} (${modKey()}+P)`, () => this.quickOpen()),
       sep(),
-      toggle(de.glossary.toolbar, de.glossary.toolbarTitle, () => void this.toggleGlossary(), () => !this.glossaryPanel.dom.hidden, this.glossaryPanel.dom),
-      toggle(de.altdir.toolbar, de.altdir.toolbarTitle, () => this.toggleSolutions(), () => this.settings.showSolutions),
-      toggle(de.preview.toolbar, de.preview.toolbarTitle(`${modKey()}+Shift+V`), () => this.togglePreview(), () => !this.preview.dom.hidden, this.preview.dom),
-      toggle(de.git.toolbar, de.git.toolbarTitle(`${modKey()}+Shift+G`), () => this.toggleGit(), () => !this.gitPanel.dom.hidden, this.gitPanel.dom),
+      toggle(ui.glossary.toolbar, ui.glossary.toolbarTitle, () => void this.toggleGlossary(), () => !this.glossaryPanel.dom.hidden, this.glossaryPanel.dom),
+      toggle(ui.altdir.toolbar, ui.altdir.toolbarTitle, () => this.toggleSolutions(), () => this.settings.showSolutions),
+      toggle(ui.preview.toolbar, ui.preview.toolbarTitle(`${modKey()}+Shift+V`), () => this.togglePreview(), () => !this.preview.dom.hidden, this.preview.dom),
+      toggle(ui.git.toolbar, ui.git.toolbarTitle(`${modKey()}+Shift+G`), () => this.toggleGit(), () => !this.gitPanel.dom.hidden, this.gitPanel.dom),
       sep(),
-      btn(de.build.toolbar, de.build.toolbarTitle(`${modKey()}+B`), () => void this.buildPanel.run()),
+      btn(ui.build.toolbar, ui.build.toolbarTitle(`${modKey()}+B`), () => void this.buildPanel.run()),
       h("span", { class: "spacer" }),
-      btn(de.logs.toolbar, de.logs.toolbarTitle, () => void this.showLogs("app")),
-      btn("⚙", de.toolbar.settings, () => void this.openSettings()),
+      btn(ui.logs.toolbar, ui.logs.toolbarTitle, () => void this.showLogs("app")),
+      btn("⚙", ui.toolbar.settings, () => void this.openSettings()),
     );
     const sidebar = h("aside", { class: "sidebar" }, this.tree.dom);
     sidebar.style.width = `${this.settings.sidebarWidth}px`;
@@ -424,10 +424,10 @@ export class App {
 
   private showWelcome(message?: string) {
     this.welcome.replaceChildren(
-      h("h1", {}, de.welcome.title),
-      h("p", {}, de.welcome.text),
+      h("h1", {}, ui.welcome.title),
+      h("p", {}, ui.welcome.text),
       message ? h("p", { class: "form-error" }, message) : "",
-      h("button", { class: "primary", onclick: () => void this.chooseCourse() }, de.welcome.choose),
+      h("button", { class: "primary", onclick: () => void this.chooseCourse() }, ui.welcome.choose),
     );
     this.welcome.hidden = false;
     this.editorHost.hidden = true;
@@ -443,11 +443,11 @@ export class App {
   // ----- course
 
   private async chooseCourse() {
-    const dir = await openDialog({ directory: true, multiple: false, title: de.welcome.choose }).catch(() => null);
+    const dir = await openDialog({ directory: true, multiple: false, title: ui.welcome.choose }).catch(() => null);
     if (typeof dir !== "string") return;
     if (!(await backend.isCourseRoot(dir))) {
-      toast(de.welcome.notACourse(dir), "error");
-      if (!this.index) this.showWelcome(de.welcome.notACourse(dir));
+      toast(ui.welcome.notACourse(dir), "error");
+      if (!this.index) this.showWelcome(ui.welcome.notACourse(dir));
       return;
     }
     if (this.settings.courseRoot && this.settings.courseRoot !== dir) {
@@ -467,7 +467,7 @@ export class App {
       this.updateMainVisibility();
       return true;
     } catch (e) {
-      this.showWelcome(de.welcome.loadFailed(String(e)));
+      this.showWelcome(ui.welcome.loadFailed(String(e)));
       return false;
     }
   }
@@ -559,7 +559,7 @@ export class App {
   private async ensureGlossaryTab(): Promise<Tab | null> {
     const p = this.index?.glossary?.path;
     if (!p) {
-      toast(de.glossary.noGlossary, "error");
+      toast(ui.glossary.noGlossary, "error");
       return null;
     }
     return this.glossaryTab() ?? (await this.openFile(p, { activate: false }));
@@ -581,7 +581,7 @@ export class App {
     const doc = tab.state.doc;
     const exists = glossaryTerms(parseProPra(doc.toString(), parserConfigFor(this.index))).some((t) => t.names.includes(name));
     if (exists) {
-      toast(de.glossary.exists(name));
+      toast(ui.glossary.exists(name));
       return this.glossaryPanel.show(name);
     }
     const ins = termInsertion(parseProPra(doc.toString(), parserConfigFor(this.index)), name);
@@ -590,7 +590,7 @@ export class App {
     this.glossaryPanel.pushExternal(changes);
     this.recomputeGlossary();
     this.glossaryPanel.show(name, ins.cursor);
-    toast(de.glossary.created(name));
+    toast(ui.glossary.created(name));
   }
 
   private async restoreTabs() {
@@ -664,15 +664,15 @@ export class App {
         if (a[i] === b[i]) continue;
         rows.push(h("div", { class: "diff-del" }, `${i + 1}  − ${a[i] ?? ""}`), h("div", { class: "diff-add" }, `${i + 1}  + ${b[i] ?? ""}`));
       }
-      return h("div", { class: "diff-file" }, h("div", { class: "diff-title" }, label), ...(rows.length ? rows : [h("div", { class: "form-hint" }, de.altdir.noChanges)]));
+      return h("div", { class: "diff-file" }, h("div", { class: "diff-title" }, label), ...(rows.length ? rows : [h("div", { class: "form-hint" }, ui.altdir.noChanges)]));
     };
-    const body = h("div", { class: "diff" }, h("p", {}, de.altdir.confirmText), section(de.altdir.taskFile, state.doc.toString(), plan.task), section(de.altdir.altFile, altText, plan.altdir));
+    const body = h("div", { class: "diff" }, h("p", {}, ui.altdir.confirmText), section(ui.altdir.taskFile, state.doc.toString(), plan.task), section(ui.altdir.altFile, altText, plan.altdir));
     return showDialog({
-      title: de.altdir.confirmTitle,
+      title: ui.altdir.confirmTitle,
       body,
       buttons: [
-        { label: de.common.cancel, value: false },
-        { label: de.altdir.confirm, value: true, primary: true },
+        { label: ui.common.cancel, value: false },
+        { label: ui.altdir.confirm, value: true, primary: true },
       ],
       cancelValue: false,
     });
@@ -717,7 +717,7 @@ export class App {
         const list = (this.settings.silencedLints[r] ??= []);
         if (!list.includes(id)) list.push(id);
         saveSettings(this.settings);
-        toast(de.lint.silenced(id));
+        toast(ui.lint.silenced(id));
         this.refreshLints();
       },
     };
@@ -770,7 +770,7 @@ export class App {
     } catch (e) {
       return toast(String(e), "error");
     }
-    if (!(await backend.pathExists(path).catch(() => false))) return toast(de.build.notInCourse(p.file), "error");
+    if (!(await backend.pathExists(path).catch(() => false))) return toast(ui.build.notInCourse(p.file), "error");
     const tab = await this.openFile(path);
     if (!tab || tab !== this.active) return;
     const loc = locateProblem(this.view.state.doc.toString(), p);
@@ -814,8 +814,8 @@ export class App {
     const changed = repos.reduce((n, r) => n + r.files.length, 0);
     const sync = `${course.ahead ? ` ↑${course.ahead}` : ""}${course.behind ? ` ↓${course.behind}` : ""}`;
     this.statusGit.hidden = false;
-    this.statusGit.textContent = `⎇ ${course.branch ?? de.git.detached}${sync}${changed ? ` · ${changed}` : ""}`;
-    this.statusGit.title = repos.map((r) => `${r.kind === "altdir" ? de.git.altdirRepo : de.git.courseRepo}: ${r.branch ?? "–"}, ${de.git.changes(r.files.length)}`).join("\n");
+    this.statusGit.textContent = `⎇ ${course.branch ?? ui.git.detached}${sync}${changed ? ` · ${changed}` : ""}`;
+    this.statusGit.title = repos.map((r) => `${r.kind === "altdir" ? ui.git.altdirRepo : ui.git.courseRepo}: ${r.branch ?? "–"}, ${ui.git.changes(r.files.length)}`).join("\n");
   }
 
   /** Diff of a file (as currently in the editor, if open) against HEAD. */
@@ -827,7 +827,7 @@ export class App {
       return toast(String(e), "error");
     }
     const current = (await this.liveText(path)) ?? "";
-    await showDiff({ title: de.git.diffTitle(rel), head, current, open: () => void this.openFile(path) });
+    await showDiff({ title: ui.git.diffTitle(rel), head, current, open: () => void this.openFile(path) });
   }
 
   private togglePreview() {
@@ -872,7 +872,7 @@ export class App {
     try {
       file = await backend.readTextFile(path);
     } catch (e) {
-      if (!opts.quiet) toast(de.file.openFailed(String(e)), "error");
+      if (!opts.quiet) toast(ui.file.openFailed(String(e)), "error");
       return null;
     }
     const part = this.index ? findPartByPath(this.index, path) : undefined;
@@ -904,7 +904,7 @@ export class App {
       wrap: this.lineWrap(),
     };
     tab.savedDoc = tab.state.doc;
-    if (file.mixedEol && !opts.quiet) toast(de.file.mixedEol(tab.name));
+    if (file.mixedEol && !opts.quiet) toast(ui.file.mixedEol(tab.name));
     const insertAt = this.active ? this.tabs.indexOf(this.active) + 1 : this.tabs.length;
     this.tabs.splice(insertAt, 0, tab);
     if (!path.toLowerCase().endsWith(".md")) {
@@ -953,12 +953,12 @@ export class App {
   private async closeTab(tab: Tab): Promise<boolean> {
     if (this.isDirty(tab)) {
       const choice = await showDialog<"save" | "discard" | "cancel">({
-        title: de.tabs.closeUnsavedTitle,
-        body: de.tabs.closeUnsaved(tab.name),
+        title: ui.tabs.closeUnsavedTitle,
+        body: ui.tabs.closeUnsaved(tab.name),
         buttons: [
-          { label: de.common.cancel, value: "cancel" },
-          { label: de.common.discard, value: "discard" },
-          { label: de.common.save, value: "save", primary: true },
+          { label: ui.common.cancel, value: "cancel" },
+          { label: ui.common.discard, value: "discard" },
+          { label: ui.common.save, value: "save", primary: true },
         ],
         cancelValue: "cancel",
       });
@@ -989,7 +989,7 @@ export class App {
     this.tabBar.replaceChildren(
       ...this.tabs.map((t) => {
         const dirty = this.isDirty(t);
-        const close = h("button", { class: "tab-close", title: de.common.close, "aria-label": de.common.close }, "×");
+        const close = h("button", { class: "tab-close", title: ui.common.close, "aria-label": ui.common.close }, "×");
         close.addEventListener("click", (e) => {
           e.stopPropagation();
           void this.closeTab(t);
@@ -998,7 +998,7 @@ export class App {
           "div",
           { class: `tab${t === this.active ? " active" : ""}${dirty ? " dirty" : ""}`, role: "tab", title: t.rel },
           h("span", { class: "tab-name" }, t.name.replace(/\.md$/i, "")),
-          h("span", { class: "tab-dirty", title: de.tabs.unsaved }, "●"),
+          h("span", { class: "tab-dirty", title: ui.tabs.unsaved }, "●"),
           close,
         );
         el.addEventListener("mousedown", (e) => {
@@ -1015,7 +1015,7 @@ export class App {
     // „Speichern“ shows whether there is something to save
     this.saveBtn?.classList.toggle("has-changes", !!act && this.isDirty(act));
     void getCurrentWindow()
-      .setTitle(act ? `${act.name}${this.isDirty(act) ? " ●" : ""} · ${de.appName}` : de.appName)
+      .setTitle(act ? `${act.name}${this.isDirty(act) ? " ●" : ""} · ${ui.appName}` : ui.appName)
       .catch(() => {});
   }
 
@@ -1056,7 +1056,7 @@ export class App {
     try {
       await backend.writeTextFile(tab.path, text, tab.eol, tab.bom);
     } catch (e) {
-      toast(de.file.saveFailed(String(e)), "error");
+      toast(ui.file.saveFailed(String(e)), "error");
       return false;
     }
     tab.savedDoc = doc;
@@ -1070,12 +1070,12 @@ export class App {
         else {
           await backend.createFile(tab.alt.path, altText);
           tab.alt.exists = true;
-          toast(de.altdir.created(tab.alt.path));
+          toast(ui.altdir.created(tab.alt.path));
         }
         tab.alt.savedDoc = altDoc;
         tab.alt.diskText = altText;
       } catch (e) {
-        toast(de.file.saveFailed(String(e)), "error");
+        toast(ui.file.saveFailed(String(e)), "error");
         this.renderTabs();
         return false;
       }
@@ -1083,7 +1083,7 @@ export class App {
     this.lastDirty.set(tab, this.isDirty(tab));
     this.renderTabs();
     this.scheduleGitRefresh();
-    toast(de.file.saved(tab.name));
+    toast(ui.file.saved(tab.name));
     return true;
   }
 
@@ -1119,11 +1119,11 @@ export class App {
         if (!dirty.length) return;
         event.preventDefault();
         const quit = await showDialog({
-          title: de.tabs.closeUnsavedTitle,
-          body: de.tabs.quitUnsaved(dirty.length),
+          title: ui.tabs.closeUnsavedTitle,
+          body: ui.tabs.quitUnsaved(dirty.length),
           buttons: [
-            { label: de.common.cancel, value: false },
-            { label: de.tabs.quit, value: true, primary: true },
+            { label: ui.common.cancel, value: false },
+            { label: ui.tabs.quit, value: true, primary: true },
           ],
           cancelValue: false,
         });
@@ -1156,7 +1156,7 @@ export class App {
       } catch {
         if (!(await backend.pathExists(tab.path).catch(() => true))) {
           tab.deleted = true;
-          toast(de.file.deleted(tab.name), "error");
+          toast(ui.file.deleted(tab.name), "error");
           this.renderTabs();
         }
         continue;
@@ -1166,18 +1166,18 @@ export class App {
       const dirty = !tab.state.doc.eq(tab.savedDoc);
       if (dirty) {
         const reload = await showDialog({
-          title: de.file.externalChangeTitle,
-          body: de.file.externalChange(tab.name),
+          title: ui.file.externalChangeTitle,
+          body: ui.file.externalChange(tab.name),
           buttons: [
-            { label: de.file.keepMine, value: false },
-            { label: de.file.reload, value: true, primary: true },
+            { label: ui.file.keepMine, value: false },
+            { label: ui.file.reload, value: true, primary: true },
           ],
           cancelValue: false,
         });
         tab.diskText = file.text;
         if (!reload) continue;
       } else {
-        toast(de.file.reloaded(tab.name));
+        toast(ui.file.reloaded(tab.name));
       }
       this.replaceContent(tab, file);
     }
@@ -1196,18 +1196,18 @@ export class App {
     if (tab === this.active) tab.state = this.view.state;
     if (this.altDirty(tab)) {
       const reload = await showDialog({
-        title: de.file.externalChangeTitle,
-        body: de.altdir.externalChange(tab.name),
+        title: ui.file.externalChangeTitle,
+        body: ui.altdir.externalChange(tab.name),
         buttons: [
-          { label: de.file.keepMine, value: false },
-          { label: de.file.reload, value: true, primary: true },
+          { label: ui.file.keepMine, value: false },
+          { label: ui.file.reload, value: true, primary: true },
         ],
         cancelValue: false,
       });
       alt.diskText = file.text;
       if (!reload) return;
     } else {
-      toast(de.altdir.reloaded(tab.name));
+      toast(ui.altdir.reloaded(tab.name));
     }
     const doc = Text.of(file.text.split("\n"));
     Object.assign(alt, { exists: true, savedDoc: doc, diskText: file.text, eol: file.eol, bom: file.bom });
@@ -1252,7 +1252,7 @@ export class App {
       try {
         template = (await backend.readTextFile(paths.template)).text;
       } catch {
-        toast(de.newTask.noTemplate);
+        toast(ui.newTask.noTemplate);
       }
       await backend.createFile(paths.task, template);
       if (req.withAltdir && paths.altdir) await backend.createFile(paths.altdir, "");
@@ -1267,7 +1267,14 @@ export class App {
     const result = await settingsDialog(this.settings, { defaultOutDir: () => backend.buildDefaultOutdir(), testSedrila: (cmd) => backend.sedrilaTest(cmd) });
     if (!result) return;
     if (result.changeCourse) return void this.chooseCourse();
+    const languageChanged = result.values.uiLanguage !== this.settings.uiLanguage;
     Object.assign(this.settings, result.values);
+    if (languageChanged) {
+      await saveSettings(this.settings, true);
+      // rebuilding the window is simplest; only without unsaved changes, otherwise on next start
+      if (!this.tabs.some((t) => this.isDirty(t))) return location.reload();
+      toast(ui.settings.languageRestart);
+    }
     this.applyFontSettings();
     this.grammar.updateSettings(this.grammarSettings());
     if (this.active && this.active.wrap !== this.lineWrap()) this.activate(this.active);
@@ -1328,7 +1335,7 @@ export class App {
     const st = this.ltStatus;
     this.statusLt.textContent = ltLabel(st, this.settings.grammarEnabled, this.grammar.client.pending);
     this.statusLt.className = `status-lt lt-${st.state}`;
-    this.statusLt.title = [st.message?.split("\n")[0], de.logs.statusHint].filter(Boolean).join("\n");
+    this.statusLt.title = [st.message?.split("\n")[0], ui.logs.statusHint].filter(Boolean).join("\n");
   }
 
   private lastProblemCount = -1;
@@ -1336,7 +1343,7 @@ export class App {
     const n = this.active ? diagnosticCount(this.view.state) : 0;
     if (n === this.lastProblemCount) return;
     this.lastProblemCount = n;
-    this.statusProblems.textContent = n ? de.problems.count(n) : "";
+    this.statusProblems.textContent = n ? ui.problems.count(n) : "";
     this.statusProblems.hidden = n === 0;
   }
 
@@ -1347,16 +1354,16 @@ export class App {
     }
     const sel = this.view.state.selection.main;
     const line = this.view.state.doc.lineAt(sel.head);
-    this.statusPos.textContent = de.status.position(line.number, sel.head - line.from + 1);
+    this.statusPos.textContent = ui.status.position(line.number, sel.head - line.from + 1);
   }
 
   private updateStatus() {
     const t = this.active;
     // the path is cut at the start („…/Git/x.md“), the encoding info never
-    this.statusPath.textContent = t ? t.rel : de.status.noFile;
+    this.statusPath.textContent = t ? t.rel : ui.status.noFile;
     this.statusLeft.title = t ? t.path : "";
     this.statusFile.textContent = t ? `·  ${t.eol === "\r\n" ? "CRLF" : "LF"}${t.bom ? " · BOM" : ""}  ·  UTF-8` : "";
-    this.statusRight.textContent = this.index && !this.index.altdirAvailable ? de.status.noAltdir : "";
+    this.statusRight.textContent = this.index && !this.index.altdirAvailable ? ui.status.noAltdir : "";
     this.updateLtStatus();
     this.updateCursor();
   }
@@ -1375,11 +1382,11 @@ function wrapWidth(font: string, sizePx: number, columns: number): number {
 }
 
 function ltLabel(st: LtStatus, enabled: boolean, pending: number): string {
-  if (!enabled) return de.grammar.status.disabled;
-  if (st.state === "ready") return pending ? `${de.grammar.status.ready}, ${de.grammar.checking(pending)}` : de.grammar.status.ready;
-  if (st.state === "starting") return st.message ? `${de.grammar.status.starting} ${st.message}` : de.grammar.status.starting;
-  if (st.state === "error") return de.grammar.status.error;
-  return de.grammar.status.stopped;
+  if (!enabled) return ui.grammar.status.disabled;
+  if (st.state === "ready") return pending ? `${ui.grammar.status.ready}, ${ui.grammar.checking(pending)}` : ui.grammar.status.ready;
+  if (st.state === "starting") return st.message ? `${ui.grammar.status.starting} ${st.message}` : ui.grammar.status.starting;
+  if (st.state === "error") return ui.grammar.status.error;
+  return ui.grammar.status.stopped;
 }
 
 function modKey() {

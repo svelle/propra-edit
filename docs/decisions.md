@@ -450,3 +450,17 @@ Still to do: the same measurements on macOS and Windows (the user's machines).
   Result: 119 MB of jars; the end-to-end check passes.
 - Resize handles of side panels are hidden while the panel is hidden (they looked usable).
 
+## Interface language (German, English)
+
+- `src/i18n/de.ts` is the reference table, `en.ts` is typed against it, so a missing key is a
+  compile error. All code reads strings through one live object `ui` (`src/i18n/index.ts`);
+  `setLanguage()` fills it before the UI is built (main.ts waits for the settings).
+- Changing the language in the settings rebuilds the window at once when nothing is unsaved;
+  otherwise it applies on the next start.
+- The Rust core translates the messages it shows (errors, LanguageTool status, macOS menu)
+  with `i18n::tr(de, en)`; it reads the language from the settings at start-up and the
+  frontend confirms it. Log file entries stay untranslated.
+- Not translated on purpose: course content and course-defined names (stage values, section
+  headings from `sedrila.yaml`, macro names), LanguageTool's own rule messages (they follow
+  the checked language, German).
+

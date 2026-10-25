@@ -3,7 +3,7 @@
 // submodule pointer in the course repo, so "altdir first, then course" leaves both clean.
 
 import type { GitFile, RepoStatus } from "../backend";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import { h, showDialog, toast } from "../ui/dom";
 
 export interface GitPanelDeps {
@@ -43,11 +43,11 @@ export class GitPanel {
   visible = false;
 
   constructor(private deps: GitPanelDeps) {
-    const close = h("button", { class: "rp-close", title: de.common.close, "aria-label": de.common.close }, "×");
+    const close = h("button", { class: "rp-close", title: ui.common.close, "aria-label": ui.common.close }, "×");
     close.addEventListener("click", () => this.hide());
-    const refresh = h("button", { class: "rp-close", title: de.git.refresh, "aria-label": de.git.refresh }, "↻");
+    const refresh = h("button", { class: "rp-close", title: ui.git.refresh, "aria-label": ui.git.refresh }, "↻");
     refresh.addEventListener("click", () => void this.refresh());
-    this.dom = h("aside", { class: "rightpanel git-panel", hidden: true }, h("div", { class: "rp-header" }, h("span", { class: "rp-heading" }, de.git.title), refresh, close), this.body);
+    this.dom = h("aside", { class: "rightpanel git-panel", hidden: true }, h("div", { class: "rp-header" }, h("span", { class: "rp-heading" }, ui.git.title), refresh, close), this.body);
   }
 
   get status(): RepoStatus[] {
@@ -90,7 +90,7 @@ export class GitPanel {
   }
 
   private repoLabel(r: RepoStatus) {
-    return r.kind === "altdir" ? de.git.altdirRepo : de.git.courseRepo;
+    return r.kind === "altdir" ? ui.git.altdirRepo : ui.git.courseRepo;
   }
 
   private async act(root: string, fn: () => Promise<unknown>) {
@@ -100,7 +100,7 @@ export class GitPanel {
     try {
       await fn();
     } catch (e) {
-      await showDialog({ title: de.git.failed, body: h("pre", { class: "gp-output" }, String(e)), buttons: [{ label: de.common.ok, value: true, primary: true }], cancelValue: true });
+      await showDialog({ title: ui.git.failed, body: h("pre", { class: "gp-output" }, String(e)), buttons: [{ label: ui.common.ok, value: true, primary: true }], cancelValue: true });
     } finally {
       this.busy.delete(root);
       await this.refresh();
@@ -109,16 +109,16 @@ export class GitPanel {
 
   private async doCommit(r: RepoStatus) {
     const msg = (this.messages.get(r.root) ?? "").trim();
-    if (!msg) return toast(de.git.emptyMessage, "error");
+    if (!msg) return toast(ui.git.emptyMessage, "error");
     const alt = this.repos.find((x) => x.kind === "altdir");
     if (r.kind === "course" && alt && alt.files.some(isStaged)) {
       const choice = await showDialog<"alt" | "course" | "cancel">({
-        title: de.git.altFirstTitle,
-        body: de.git.altFirst,
+        title: ui.git.altFirstTitle,
+        body: ui.git.altFirst,
         buttons: [
-          { label: de.common.cancel, value: "cancel" },
-          { label: de.git.courseOnly, value: "course" },
-          { label: de.git.altThenCourse, value: "alt", primary: true },
+          { label: ui.common.cancel, value: "cancel" },
+          { label: ui.git.courseOnly, value: "course" },
+          { label: ui.git.altThenCourse, value: "alt", primary: true },
         ],
         cancelValue: "cancel",
       });
@@ -137,7 +137,7 @@ export class GitPanel {
       await this.deps.saveAll();
       await this.deps.commit(r.root, msg);
       this.messages.delete(r.root);
-      toast(de.git.committed(this.repoLabel(r)));
+      toast(ui.git.committed(this.repoLabel(r)));
     });
   }
 
@@ -148,14 +148,14 @@ export class GitPanel {
     const ptr = course?.submoduleRel && course.files.find((f) => f.rel === course.submoduleRel && f.submodule);
     if (course && ptr) {
       await this.deps.stage(course.root, [ptr.rel]);
-      toast(de.git.pointerStaged);
+      toast(ui.git.pointerStaged);
     }
   }
 
   private fileRow(r: RepoStatus, f: GitFile, staged: boolean) {
     const letter = statusLetter(f, staged);
-    const name = f.submodule ? de.git.submodulePointer(f.rel) : f.rel;
-    const btn = h("button", { class: "gp-btn", title: staged ? de.git.unstage : de.git.stage }, staged ? "−" : "+");
+    const name = f.submodule ? ui.git.submodulePointer(f.rel) : f.rel;
+    const btn = h("button", { class: "gp-btn", title: staged ? ui.git.unstage : ui.git.stage }, staged ? "−" : "+");
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       void this.act(r.root, async () => {
@@ -164,14 +164,14 @@ export class GitPanel {
         else await this.deps.stage(r.root, [f.rel]);
       });
     });
-    const open = h("button", { class: "gp-btn", title: de.git.openFile }, "↗");
+    const open = h("button", { class: "gp-btn", title: ui.git.openFile }, "↗");
     open.addEventListener("click", (e) => {
       e.stopPropagation();
       this.deps.open(f.path);
     });
     const row = h(
       "div",
-      { class: `gp-file gp-${letter === "?" ? "new" : letter}`, title: `${f.rel}${f.origRel ? ` (${de.git.renamedFrom} ${f.origRel})` : ""}\n${de.git.clickDiff}` },
+      { class: `gp-file gp-${letter === "?" ? "new" : letter}`, title: `${f.rel}${f.origRel ? ` (${ui.git.renamedFrom} ${f.origRel})` : ""}\n${ui.git.clickDiff}` },
       h("span", { class: "gp-letter" }, letter),
       h("span", { class: "gp-name" }, name),
       f.submodule ? null : open,
@@ -189,32 +189,32 @@ export class GitPanel {
     const busy = this.busy.has(r.root);
     const staged = r.files.filter(isStaged);
     const unstaged = r.files.filter(isUnstaged);
-    const branch = r.branch ?? de.git.detached;
-    const sync = r.upstream ? `${r.ahead ? ` ↑${r.ahead}` : ""}${r.behind ? ` ↓${r.behind}` : ""}` : ` (${de.git.noUpstream})`;
-    const pull = h("button", { class: "tool", disabled: busy || !r.upstream, title: de.git.pullTitle }, de.git.pull);
+    const branch = r.branch ?? ui.git.detached;
+    const sync = r.upstream ? `${r.ahead ? ` ↑${r.ahead}` : ""}${r.behind ? ` ↓${r.behind}` : ""}` : ` (${ui.git.noUpstream})`;
+    const pull = h("button", { class: "tool", disabled: busy || !r.upstream, title: ui.git.pullTitle }, ui.git.pull);
     pull.addEventListener("click", () =>
       void this.act(r.root, async () => {
         const out = await this.deps.pull(r.root);
-        toast(/already up.to.date|bereits aktuell/i.test(out) ? de.git.upToDate : de.git.pulled);
+        toast(/already up.to.date|bereits aktuell/i.test(out) ? ui.git.upToDate : ui.git.pulled);
       }),
     );
-    const push = h("button", { class: "tool", disabled: busy || !r.hasCommits || (!!r.upstream && r.ahead === 0), title: de.git.pushTitle }, de.git.push);
+    const push = h("button", { class: "tool", disabled: busy || !r.hasCommits || (!!r.upstream && r.ahead === 0), title: ui.git.pushTitle }, ui.git.push);
     push.addEventListener("click", () =>
       void this.act(r.root, async () => {
         await this.deps.push(r.root, !!r.upstream);
-        toast(de.git.pushed(this.repoLabel(r)));
+        toast(ui.git.pushed(this.repoLabel(r)));
       }),
     );
-    const stageAll = h("button", { class: "gp-link", disabled: busy }, de.git.stageAll);
+    const stageAll = h("button", { class: "gp-link", disabled: busy }, ui.git.stageAll);
     stageAll.addEventListener("click", () =>
       void this.act(r.root, async () => {
         await this.deps.saveAll();
         await this.deps.stage(r.root, unstaged.map((f) => f.rel));
       }),
     );
-    const msg = h("textarea", { class: "gp-message", rows: 3, placeholder: de.git.messagePlaceholder(this.repoLabel(r)), spellcheck: "true", lang: "de" }) as HTMLTextAreaElement;
+    const msg = h("textarea", { class: "gp-message", rows: 3, placeholder: ui.git.messagePlaceholder(this.repoLabel(r)), spellcheck: "true", lang: "de" }) as HTMLTextAreaElement;
     msg.value = this.messages.get(r.root) ?? "";
-    const commit = h("button", { class: "primary", disabled: busy || !staged.length }, de.git.commit(staged.length));
+    const commit = h("button", { class: "primary", disabled: busy || !staged.length }, ui.git.commit(staged.length));
     msg.addEventListener("input", () => this.messages.set(r.root, msg.value));
     msg.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -227,9 +227,9 @@ export class GitPanel {
       "div",
       { class: `gp-repo${busy ? " busy" : ""}` },
       h("div", { class: "gp-repo-head" }, h("strong", {}, this.repoLabel(r)), h("span", { class: "gp-branch", title: r.root }, `⎇ ${branch}${sync}`), h("span", { class: "spacer" }), pull, push),
-      staged.length ? this.section(de.git.staged(staged.length), staged.map((f) => this.fileRow(r, f, true))) : null,
-      unstaged.length ? this.section(de.git.changes(unstaged.length), unstaged.map((f) => this.fileRow(r, f, false)), stageAll) : null,
-      !staged.length && !unstaged.length ? h("div", { class: "gp-clean" }, de.git.clean) : null,
+      staged.length ? this.section(ui.git.staged(staged.length), staged.map((f) => this.fileRow(r, f, true))) : null,
+      unstaged.length ? this.section(ui.git.changes(unstaged.length), unstaged.map((f) => this.fileRow(r, f, false)), stageAll) : null,
+      !staged.length && !unstaged.length ? h("div", { class: "gp-clean" }, ui.git.clean) : null,
       msg,
       h("div", { class: "gp-commit-row" }, commit),
     );
@@ -241,7 +241,7 @@ export class GitPanel {
       return;
     }
     if (!this.repos.length) {
-      this.body.replaceChildren(h("div", { class: "gp-clean" }, de.git.noRepo));
+      this.body.replaceChildren(h("div", { class: "gp-clean" }, ui.git.noRepo));
       return;
     }
     // keep focus and caret in a message box across re-renders

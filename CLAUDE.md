@@ -43,7 +43,9 @@ On Linux, building needs `libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev lib
 - `src/altdir/`: solution segments and renumbering (`segments.ts`, pure), solution document and enumeration tracking in the task state (`state.ts`), inline widgets and warning bar (`widgets.ts`).
 - `src/preview/render.ts`: preview renderer (markdown-it + sedrila macro expansion, pure). `src/panels/preview.ts`: preview panel.
 - `src/app.ts`: tabs, saving, external changes. `src/panels/`: tree, quick open, dialogs.
-- `src/i18n/de.ts`: all UI strings.
+- `src/i18n/`: UI strings. `de.ts` is the reference table, `en.ts` has the same shape; code reads
+  them through `ui` from `src/i18n/index.ts` (filled at start-up for the chosen language).
+  Rust messages shown to the user use `i18n::tr(de, en)` (`src-tauri/src/i18n.rs`).
 - `test-fixtures/course/`: fake course incl. altdir. Automated tests use only this.
 
 ## Conventions
@@ -53,7 +55,8 @@ On Linux, building needs `libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev lib
   Multi-file changes are previewed and undoable.
 - Paths: built in Rust with `PathBuf`; the frontend treats them as opaque strings.
   `rel` fields (always `/`-separated) are for display and matching only.
-- UI strings only in `src/i18n/de.ts`; German typography („…“), no em dashes.
+- UI strings only in `src/i18n/de.ts` and `src/i18n/en.ts` (both, same keys); German
+  typography („…“) in German, no em dashes.
 - Pin exact dependency versions, releases at least two weeks old. LanguageTool and the JRE
   are downloaded by `scripts/fetch-runtime`, never committed.
 - Parser rules must match sedrila (macro regex, top matter split); note deviations in

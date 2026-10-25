@@ -7,6 +7,8 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use crate::i18n::tr;
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GitFile {
@@ -67,7 +69,10 @@ fn git_cmd(git: &str, dir: &Path) -> Command {
 pub fn run(git: &str, dir: &Path, args: &[&str]) -> Result<String, String> {
     let out = git_cmd(git, dir).args(args).output().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
-            "git wurde nicht gefunden. Bitte git installieren oder den Pfad in den Einstellungen angeben.".to_string()
+            tr(
+                "git wurde nicht gefunden. Bitte git installieren oder den Pfad in den Einstellungen angeben.",
+                "git was not found. Please install git or set its path in the settings.",
+            )
         } else {
             e.to_string()
         }
@@ -276,7 +281,7 @@ pub fn pull(git: &str, repo: &Path) -> Result<String, String> {
 
 pub fn commit(git: &str, repo: &Path, message: &str) -> Result<String, String> {
     if message.trim().is_empty() {
-        return Err("Die Commit-Nachricht ist leer".into());
+        return Err(tr("Die Commit-Nachricht ist leer", "The commit message is empty"));
     }
     run_all(git, repo, &["commit", "-m", message])
 }
@@ -284,11 +289,11 @@ pub fn commit(git: &str, repo: &Path, message: &str) -> Result<String, String> {
 /// Content of a file at HEAD of its repository; None if it is not in HEAD (new file).
 pub fn head_text(git: &str, path: &Path) -> Result<Option<String>, String> {
     let dir = path.parent().ok_or("kein Verzeichnis")?;
-    let top = toplevel(git, dir).ok_or("Die Datei liegt in keinem git-Repository")?;
+    let top = toplevel(git, dir).ok_or_else(|| tr("Die Datei liegt in keinem git-Repository", "The file is not in a git repository"))?;
     let rel = canon(path)
         .strip_prefix(&top)
         .map(|r| crate::course::index::rel_string(Path::new(""), r))
-        .map_err(|_| "Pfad außerhalb des Repositorys".to_string())?;
+        .map_err(|_| tr("Pfad außerhalb des Repositorys", "Path outside the repository"))?;
     let out = git_cmd(git, &top).args(["show", &format!("HEAD:{rel}")]).output().map_err(|e| e.to_string())?;
     if !out.status.success() {
         return Ok(None);

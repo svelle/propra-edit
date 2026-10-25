@@ -18,6 +18,8 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::i18n::{is_english, tr};
+
 pub const SERVER_CLASS: &str = "org.languagetool.server.HTTPServer";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(90);
 const CHECK_WAIT_TIMEOUT: Duration = Duration::from_secs(180);
@@ -86,10 +88,12 @@ pub fn locate(resource_dir: Option<&Path>, java_override: Option<PathBuf>, lib_o
         .filter(|d| has_jars(d))
         .or_else(|| resource_dir.map(|r| r.join("languagetool").join("lib")).filter(|d| has_jars(d)))
         .ok_or_else(|| {
-            format!(
-                "LanguageTool wurde nicht gefunden (gesucht in {}). Für Entwicklungs-Builds: scripts/fetch-runtime ausführen.",
-                resource_dir.map(|r| r.join("languagetool").join("lib").display().to_string()).unwrap_or_else(|| "–".into())
-            )
+            let dir = resource_dir.map(|r| r.join("languagetool").join("lib").display().to_string()).unwrap_or_else(|| "–".into());
+            if is_english() {
+                format!("LanguageTool was not found (looked in {dir}). For development builds: run scripts/fetch-runtime.")
+            } else {
+                format!("LanguageTool wurde nicht gefunden (gesucht in {dir}). Für Entwicklungs-Builds: scripts/fetch-runtime ausführen.")
+            }
         })?;
     let java = java_override
         .filter(|j| j.is_file())
@@ -255,7 +259,7 @@ impl LanguageTool {
             const CREATE_NO_WINDOW: u32 = 0x0800_0000;
             cmd.creation_flags(CREATE_NO_WINDOW);
         }
-        cmd.spawn().map_err(|e| format!("Java konnte nicht gestartet werden ({}): {}", loc.java.display(), e))
+        cmd.spawn().map_err(|e| format!("{} ({}): {}", tr("Java konnte nicht gestartet werden", "Java could not be started"), loc.java.display(), e))
     }
 
     fn run(&self, generation: u64) -> Result<(), String> {
@@ -276,18 +280,22 @@ impl LanguageTool {
         let url = format!("http://127.0.0.1:{port}/v2/languages");
         loop {
             if self.child_exited(generation) {
-                return Err(self.with_log_tail(format!("LanguageTool wurde beim Start beendet ({})", self.exit_info(generation))));
+                return Err(self.with_log_tail(format!("{} ({})", tr("LanguageTool wurde beim Start beendet", "LanguageTool exited during start-up"), self.exit_info(generation))));
             }
             if ureq::get(&url).timeout(Duration::from_secs(2)).call().is_ok() {
                 break;
             }
             if start.elapsed() > STARTUP_TIMEOUT {
-                return Err(self.with_log_tail(format!("LanguageTool antwortet nicht (Zeitüberschreitung nach {} s beim Start)", STARTUP_TIMEOUT.as_secs())));
+                return Err(self.with_log_tail(if is_english() {
+                    format!("LanguageTool does not respond (timeout after {} s during start-up)", STARTUP_TIMEOUT.as_secs())
+                } else {
+                    format!("LanguageTool antwortet nicht (Zeitüberschreitung nach {} s beim Start)", STARTUP_TIMEOUT.as_secs())
+                }));
             }
             std::thread::sleep(Duration::from_millis(200));
         }
-        self.set_status(generation, LtStatus::new("starting", Some("Wird aufgewärmt …".into())));
-        post_check(port, &[("language", "de-DE"), ("text", WARMUP_TEXT)]).map_err(|e| self.with_log_tail(format!("Aufwärmen fehlgeschlagen: {e}")))?;
+        self.set_status(generation, LtStatus::new("starting", Some(tr("Wird aufgewärmt …", "Warming up …"))));
+        post_check(port, &[("language", "de-DE"), ("text", WARMUP_TEXT)]).map_err(|e| self.with_log_tail(format!("{}: {e}", tr("Aufwärmen fehlgeschlagen", "Warm-up failed"))))?;
         {
             let mut g = self.inner.0.lock().unwrap();
             if g.generation != generation {
@@ -310,7 +318,7 @@ impl LanguageTool {
                 if ready_at.elapsed() > Duration::from_secs(300) {
                     self.inner.0.lock().unwrap().restarts = 0;
                 }
-                return Err(self.with_log_tail(format!("LanguageTool ist abgestürzt ({})", self.exit_info(generation))));
+                return Err(self.with_log_tail(format!("{} ({})", tr("LanguageTool ist abgestürzt", "LanguageTool crashed"), self.exit_info(generation))));
             }
         }
     }
@@ -323,15 +331,15 @@ impl LanguageTool {
     fn exit_info(&self, generation: u64) -> String {
         let mut g = self.inner.0.lock().unwrap();
         if g.generation != generation {
-            return "beendet".into();
+            return tr("beendet", "exited");
         }
         match g.child.as_mut().map(|c| c.try_wait()) {
             Some(Ok(Some(st))) => match st.code() {
-                Some(c) => format!("Exit-Code {c}"),
+                Some(c) => format!("{} {c}", tr("Exit-Code", "exit code")),
                 None => format!("{st}"),
             },
             Some(Err(e)) => e.to_string(),
-            _ => "beendet".into(),
+            _ => tr("beendet", "exited"),
         }
     }
 
@@ -339,9 +347,9 @@ impl LanguageTool {
     fn with_log_tail(&self, msg: String) -> String {
         let lines = lines_of_last_start(&crate::applog::tail(&self.log_path(), 16 * 1024), 8);
         if lines.is_empty() {
-            format!("{msg}. Keine Ausgabe von Java in {}", crate::applog::LT_LOG)
+            format!("{msg}. {} {}", tr("Keine Ausgabe von Java in", "No output from Java in"), crate::applog::LT_LOG)
         } else {
-            format!("{msg}. Letzte Zeilen aus {}:\n{}", crate::applog::LT_LOG, lines.join("\n"))
+            format!("{msg}. {} {}:\n{}", tr("Letzte Zeilen aus", "Last lines of"), crate::applog::LT_LOG, lines.join("\n"))
         }
     }
 
@@ -389,14 +397,14 @@ impl LanguageTool {
                 return Ok(port);
             }
             if g.status.state == "error" && g.restarts >= MAX_RESTARTS || g.status.state == "stopped" && g.shutting_down {
-                return Err(g.status.message.clone().unwrap_or_else(|| "LanguageTool ist nicht verfügbar".into()));
+                return Err(g.status.message.clone().unwrap_or_else(|| tr("LanguageTool ist nicht verfügbar", "LanguageTool is not available")));
             }
             if self.location.lock().unwrap().is_err() {
                 return Err(self.location.lock().unwrap().clone().unwrap_err());
             }
             let now = Instant::now();
             if now >= deadline {
-                return Err("LanguageTool ist nicht bereit (Zeitüberschreitung)".into());
+                return Err(tr("LanguageTool ist nicht bereit (Zeitüberschreitung)", "LanguageTool is not ready (timeout)"));
             }
             g = cv.wait_timeout(g, deadline - now).unwrap().0;
         }

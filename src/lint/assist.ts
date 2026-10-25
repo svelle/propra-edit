@@ -7,7 +7,7 @@ import { autocompletion, type Completion, type CompletionContext, type Completio
 import { buildMacroTable } from "../editor/macros";
 import { propraDoc, propraFileInfo } from "../editor/propra-language";
 import type { MacroCall } from "../editor/parser";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import { propraEnv, type PartRef, type PropraEnv, type TermRef } from "./env";
 import { listItems } from "./structural";
 
@@ -60,7 +60,7 @@ async function completePropra(ctx: CompletionContext): Promise<CompletionResult 
     if (!kv) return null;
     const [, key, value] = kv;
     if (key === "stage") return { from: ctx.pos - value.length, options: env.stages().map((s) => ({ label: s, type: "enum" })) };
-    if (key === "difficulty") return { from: ctx.pos - value.length, options: de.assist.difficulties.map((d, i) => ({ label: String(i + 1), detail: d, type: "enum" })) };
+    if (key === "difficulty") return { from: ctx.pos - value.length, options: ui.assist.difficulties.map((d, i) => ({ label: String(i + 1), detail: d, type: "enum" })) };
     if (key === "assumes" || key === "requires") return listCompletion(ctx, value, partOptions(env));
     if (key === "explains") return listCompletion(ctx, value, termOptions(env));
     return null;
@@ -193,25 +193,25 @@ const propraHover = hoverTooltip(async (view, pos): Promise<Tooltip | null> => {
   const { target } = hit;
   let dom: HTMLElement;
   if (target.kind === "part") {
-    dom = tooltipDom(target.part.title ?? target.part.name, target.part.rel, de.assist.clickToOpen);
+    dom = tooltipDom(target.part.title ?? target.part.name, target.part.rel, ui.assist.clickToOpen);
   } else if (target.kind === "term") {
     if (!target.term) return null;
     const term = target.term;
     const synonyms = term.names.filter((n) => n !== term.names[0]);
-    dom = tooltipDom(term.names[0], synonyms.length ? de.assist.synonyms(synonyms) : de.assist.noSynonyms);
+    dom = tooltipDom(term.names[0], synonyms.length ? ui.assist.synonyms(synonyms) : ui.assist.noSynonyms);
     const def = document.createElement("div");
     def.className = "cm-pm-hover-def";
-    if (term.term0 || !term.body.trim()) def.textContent = de.assist.term0;
+    if (term.term0 || !term.body.trim()) def.textContent = ui.assist.term0;
     else def.innerHTML = renderFragment(term.body, view.state.facet(propraFileInfo).cfg);
     const edit = document.createElement("button");
     edit.className = "cm-pm-hover-edit";
-    edit.textContent = de.assist.editTerm;
+    edit.textContent = ui.assist.editTerm;
     edit.addEventListener("click", () => env.openTerm(term.names[0]));
     dom.append(def, edit);
   } else {
     const st = await resolveInclude(env, target.call).catch(() => null);
     if (!st?.path) return null;
-    dom = tooltipDom(st.exists ? de.assist.includeTarget : de.assist.includeMissing, st.path, st.exists ? de.assist.clickToOpen : "");
+    dom = tooltipDom(st.exists ? ui.assist.includeTarget : ui.assist.includeMissing, st.path, st.exists ? ui.assist.clickToOpen : "");
   }
   return { pos: hit.from, end: hit.to, above: true, create: () => ({ dom }) };
 });

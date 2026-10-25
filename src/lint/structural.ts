@@ -3,7 +3,7 @@
 
 import type { MacroCall, ProPraDoc, TopMatterEntry } from "../editor/parser";
 import { EREF_TO_ENUM } from "../editor/macros";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import { duplicateNames, glossaryTerms, outOfOrder } from "../glossary/model";
 
 export type FileKind = "task" | "taskgroup" | "chapter" | "glossary" | "include" | "other";
@@ -103,7 +103,7 @@ export function listItems(e: TopMatterEntry): { name: string; from: number; to: 
 export function structuralLints(doc: ProPraDoc, ctx: LintContext): LintFinding[] {
   const out: LintFinding[] = [];
   const add = (id: LintId, from: number, to: number, severity: Severity, message: string) => out.push({ id, from, to, severity, message });
-  const m = de.lint;
+  const m = ui.lint;
   const isPart = PART_FILE_KINDS.has(ctx.fileKind);
 
   // ----- macro names and arity

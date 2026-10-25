@@ -23,9 +23,10 @@ import { lintPanelExtras } from "./lint-panel";
 import { lintKeymap } from "@codemirror/lint";
 import { quickFixKeymap } from "./quickfix";
 import type { ParserConfig } from "./parser";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 
-const germanPhrases = EditorState.phrases.of(de.codemirror);
+// CodeMirror's own strings in the UI language (read when an editor is created)
+const uiPhrases = () => EditorState.phrases.of(ui.codemirror);
 
 export const wrapCompartment = new Compartment();
 export const languageCompartment = new Compartment();
@@ -67,7 +68,7 @@ export function embeddedEditorExtensions(cfg: ParserConfig, topMatter: boolean, 
     highlightActiveLine(),
     highlightSpecialChars(),
     EditorView.lineWrapping,
-    germanPhrases,
+    uiPhrases(),
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...quickFixKeymap]),
     EditorView.contentAttributes.of({ spellcheck: "false", autocorrect: "off", autocapitalize: "off" }),
     propraLanguage({ topMatter, cfg }),
@@ -79,7 +80,7 @@ export function createState(text: string, setup: FileSetup): EditorState {
   return EditorState.create({
     doc: text,
     extensions: [
-      germanPhrases,
+      uiPhrases(),
       lineNumbers(),
       highlightActiveLineGutter(),
       highlightSpecialChars(),

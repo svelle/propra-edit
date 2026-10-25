@@ -156,6 +156,7 @@ export const backend = {
   gitPush: (root: string, hasUpstream: boolean) => invoke<string>("git_push", { root, hasUpstream }),
   gitPull: (root: string) => invoke<string>("git_pull", { root }),
   gitHeadText: (path: string) => invoke<string | null>("git_head_text", { path }),
+  setUiLanguage: (lang: string) => invoke<void>("set_ui_language", { lang }),
   readLogs: () => invoke<{ dir: string; app: string; languagetool: string }>("read_logs"),
   openLogDir: () => invoke<void>("open_log_dir"),
   logFrontend: (level: "error" | "info", message: string) => invoke<void>("log_frontend", { level, message }),

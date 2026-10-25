@@ -3,7 +3,7 @@
 
 import type { CourseIndex } from "../backend";
 import { PART_NAME_RE, partNames } from "../course";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import { h, showDialog } from "../ui/dom";
 
 export interface NewTaskRequest {
@@ -14,9 +14,9 @@ export interface NewTaskRequest {
 }
 
 export function validateTaskName(name: string, taken: Set<string>): string | null {
-  if (!name) return de.newTask.emptyName;
-  if (!PART_NAME_RE.test(name)) return de.newTask.invalidName;
-  if (taken.has(name)) return de.newTask.duplicate(name);
+  if (!name) return ui.newTask.emptyName;
+  if (!PART_NAME_RE.test(name)) return ui.newTask.invalidName;
+  if (taken.has(name)) return ui.newTask.duplicate(name);
   return null;
 }
 
@@ -41,11 +41,11 @@ export async function newTaskDialog(index: CourseIndex, preselect: { chapter: st
   const body = h(
     "div",
     { class: "form" },
-    h("label", {}, de.newTask.taskgroup, select),
-    h("label", {}, de.newTask.name, nameInput),
+    h("label", {}, ui.newTask.taskgroup, select),
+    h("label", {}, ui.newTask.name, nameInput),
     error,
-    h("label", { class: "checkbox" }, alt, index.altdirAvailable ? de.newTask.withAltdir : de.newTask.altdirMissing),
-    h("div", { class: "form-hint" }, de.newTask.filesToCreate),
+    h("label", { class: "checkbox" }, alt, index.altdirAvailable ? ui.newTask.withAltdir : ui.newTask.altdirMissing),
+    h("div", { class: "form-hint" }, ui.newTask.filesToCreate),
     files,
   );
   let createBtn: HTMLButtonElement | null = null;
@@ -66,11 +66,11 @@ export async function newTaskDialog(index: CourseIndex, preselect: { chapter: st
   alt.addEventListener("change", update);
 
   const ok = await showDialog({
-    title: de.newTask.title,
+    title: ui.newTask.title,
     body,
     buttons: [
-      { label: de.common.cancel, value: false },
-      { label: de.newTask.create, value: true, primary: true },
+      { label: ui.common.cancel, value: false },
+      { label: ui.newTask.create, value: true, primary: true },
     ],
     cancelValue: false,
     onOpen: (root) => {

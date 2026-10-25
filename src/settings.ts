@@ -1,10 +1,13 @@
 // App settings with defaults. Stored as one JSON file by the Rust core.
 
 import { backend } from "./backend";
+import type { UiLanguage } from "./i18n";
 
 export type WrapMode = "column" | "window" | "off";
 
 export interface Settings {
+  /** Language of the interface (the course content stays German). */
+  uiLanguage: UiLanguage;
   courseRoot: string | null;
   openTabs: string[];
   activeTab: string | null;
@@ -47,6 +50,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  uiLanguage: "de",
   courseRoot: null,
   openTabs: [],
   activeTab: null,

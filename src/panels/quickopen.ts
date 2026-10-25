@@ -2,13 +2,13 @@
 
 import type { OpenableItem } from "../course";
 import { fuzzyFilter } from "../fuzzy";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import { h } from "../ui/dom";
 
 export function quickOpen(items: OpenableItem[], open: (path: string) => void) {
   if (document.querySelector(".quickopen")) return;
   const prevFocus = document.activeElement as HTMLElement | null;
-  const input = h("input", { type: "text", placeholder: de.quickOpen.placeholder, spellcheck: "false" });
+  const input = h("input", { type: "text", placeholder: ui.quickOpen.placeholder, spellcheck: "false" });
   const list = h("div", { class: "quickopen-list", role: "listbox" });
   const box = h("div", { class: "quickopen" }, input, list);
   const overlay = h("div", { class: "overlay overlay-top" }, box);
@@ -39,7 +39,7 @@ export function quickOpen(items: OpenableItem[], open: (path: string) => void) {
             });
             return row;
           })
-        : [h("div", { class: "quickopen-empty" }, de.quickOpen.noResults)]),
+        : [h("div", { class: "quickopen-empty" }, ui.quickOpen.noResults)]),
     );
     list.querySelector(".selected")?.scrollIntoView({ block: "nearest" });
   };

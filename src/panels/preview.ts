@@ -3,7 +3,7 @@
 // top visible source line via the data-line attributes the renderer emits.
 
 import { parseProPra, type MacroCall, type ParserConfig } from "../editor/parser";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import { escapeHtml, includeKeyOf, renderDocument, type IncludeContent } from "../preview/render";
 import { h } from "../ui/dom";
 
@@ -78,7 +78,7 @@ export class PreviewPanel {
   visible = false;
 
   constructor(private deps: PreviewDeps) {
-    const close = h("button", { class: "rp-close", title: de.common.close, "aria-label": de.common.close }, "×");
+    const close = h("button", { class: "rp-close", title: ui.common.close, "aria-label": ui.common.close }, "×");
     close.addEventListener("click", () => this.hide());
     this.tutorBox.checked = deps.tutorView;
     this.tutorBox.addEventListener("change", () => {
@@ -92,7 +92,7 @@ export class PreviewPanel {
     this.dom = h(
       "aside",
       { class: "rightpanel preview-panel", hidden: true },
-      h("div", { class: "rp-header" }, h("span", { class: "rp-heading" }, de.preview.title), h("label", { class: "pv-tutor", title: de.preview.tutorTitle }, this.tutorBox, de.preview.tutor), close),
+      h("div", { class: "rp-header" }, h("span", { class: "rp-heading" }, ui.preview.title), h("label", { class: "pv-tutor", title: ui.preview.tutorTitle }, this.tutorBox, ui.preview.tutor), close),
       body,
     );
     this.content.addEventListener("click", (e) => this.onClick(e));
@@ -174,7 +174,7 @@ export class PreviewPanel {
     const src = this.deps.source();
     const gen = ++this.generation;
     if (!src) {
-      this.content.replaceChildren(h("p", { class: "pv-note" }, de.preview.nothing));
+      this.content.replaceChildren(h("p", { class: "pv-note" }, ui.preview.nothing));
       this.lines = [];
       return;
     }
@@ -200,7 +200,7 @@ export class PreviewPanel {
     const diffClass = difficulty ? ` pagetype-task-difficulty${escapeHtml(difficulty)}` : "";
     this.content.innerHTML =
       `<main>${title ? `<h1>${escapeHtml(title)}</h1>` : ""}<div id="taskbody" class="pagetype-task${diffClass}">${html}</div></main>` +
-      `<p class="pv-note">${escapeHtml(de.preview.approximate)}</p>`;
+      `<p class="pv-note">${escapeHtml(ui.preview.approximate)}</p>`;
     this.content.querySelectorAll("details").forEach((d, i) => (d.open = open[i] ?? false));
     this.lines = [...this.content.querySelectorAll<HTMLElement>("[data-line]")]
       .map((el) => ({ line: Number(el.dataset.line), el }))
@@ -229,7 +229,7 @@ export class PreviewPanel {
       try {
         svg = (await mermaid.render(`pv-mermaid-${++mermaidId}`, code)).svg;
       } catch (e) {
-        svg = `<span class="pv-missing">${escapeHtml(de.preview.mermaidError(String(e)))}</span>`;
+        svg = `<span class="pv-missing">${escapeHtml(ui.preview.mermaidError(String(e)))}</span>`;
       }
       MERMAID_CACHE.set(code, svg);
       if (gen === this.generation && n.isConnected) n.innerHTML = svg;

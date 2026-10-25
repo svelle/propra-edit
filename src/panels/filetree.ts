@@ -4,7 +4,7 @@
 import type { CourseIndex, FileEntry, PartInfo, TaskgroupNode } from "../backend";
 import { openableItems, type OpenableItem } from "../course";
 import { fuzzyFilter } from "../fuzzy";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import { h } from "../ui/dom";
 
 export interface FileTreeCallbacks {
@@ -34,7 +34,7 @@ export class FileTree {
     expanded: string[] = [],
   ) {
     this.expanded = new Set(expanded);
-    this.filterInput = h("input", { type: "search", class: "tree-filter", placeholder: de.tree.filter, spellcheck: "false" });
+    this.filterInput = h("input", { type: "search", class: "tree-filter", placeholder: ui.tree.filter, spellcheck: "false" });
     this.filterInput.addEventListener("input", () => this.render());
     this.filterInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -107,21 +107,21 @@ export class FileTree {
       if (alt) {
         alt.classList.remove("changed");
         alt.textContent = alt.classList.contains("yes") ? "L" : "";
-        alt.title = alt.classList.contains("yes") ? de.tree.hasAltdir : de.tree.noAltdir;
+        alt.title = alt.classList.contains("yes") ? ui.tree.hasAltdir : ui.tree.noAltdir;
       }
       const m = this.gitMarks.get(row.dataset.path!);
       if (!m) continue;
       if (m.code) {
         row.classList.add(`git-${m.code === "?" ? "new" : m.code}`);
         const letter = m.code === "?" ? "N" : m.code === "U" ? "!" : m.code;
-        const title = m.code === "?" ? de.git.markNew : m.code === "A" ? de.git.markAdded : de.git.markModified;
+        const title = m.code === "?" ? ui.git.markNew : m.code === "A" ? ui.git.markAdded : ui.git.markModified;
         cell?.append(h("span", { class: "git-mark", title }, letter));
       }
       if (m.alt && alt) {
         // a changed (possibly new) solution: "L*"
         alt.classList.add("changed");
         alt.textContent = "L*";
-        alt.title = de.git.markAlt;
+        alt.title = ui.git.markAlt;
       }
     }
   }
@@ -154,7 +154,7 @@ export class FileTree {
       { class: "tree-label", title: p.title ? `${p.name}: ${p.title}` : p.name },
       h("span", { class: "tree-name" }, p.name),
       showTitle ? h("span", { class: "tree-title" }, p.title) : null,
-      p.missing ? h("span", { class: "badge warn", title: de.tree.missing }, "!") : null,
+      p.missing ? h("span", { class: "badge warn", title: ui.tree.missing }, "!") : null,
     );
   }
 
@@ -162,20 +162,20 @@ export class FileTree {
   private badges(p: PartInfo) {
     const stage = p.stage ? p.stage.split(/\s/)[0] : "";
     const stageCell = stage
-      ? h("span", { class: `badge stage stage-${/^[a-z]+$/.test(stage) ? stage : "other"}`, title: de.tree.stage(p.stage!) }, stage)
+      ? h("span", { class: `badge stage stage-${/^[a-z]+$/.test(stage) ? stage : "other"}`, title: ui.tree.stage(p.stage!) }, stage)
       : p.kind === "task"
-        ? h("span", { class: "stage-none", title: de.tree.noStage }, "✓")
+        ? h("span", { class: "stage-none", title: ui.tree.noStage }, "✓")
         : null;
     const d = Number(p.difficulty);
     const diffCell =
       d >= 1 && d <= 4
-        ? h("span", { class: `diff-dots difficulty${d}`, title: de.tree.difficulty(d) }, "●".repeat(d) + "○".repeat(4 - d))
+        ? h("span", { class: `diff-dots difficulty${d}`, title: ui.tree.difficulty(d) }, "●".repeat(d) + "○".repeat(4 - d))
         : p.difficulty
-          ? h("span", { class: "badge warn", title: de.tree.difficulty(Number.NaN) }, p.difficulty)
+          ? h("span", { class: "badge warn", title: ui.tree.difficulty(Number.NaN) }, p.difficulty)
           : null;
     const altCell =
       p.kind === "task" && this.index?.altdirAvailable
-        ? h("span", { class: `altdir-marker ${p.altdirExists ? "yes" : "no"}`, title: p.altdirExists ? de.tree.hasAltdir : de.tree.noAltdir }, p.altdirExists ? "L" : "")
+        ? h("span", { class: `altdir-marker ${p.altdirExists ? "yes" : "no"}`, title: p.altdirExists ? ui.tree.hasAltdir : ui.tree.noAltdir }, p.altdirExists ? "L" : "")
         : null;
     return h("span", { class: "tree-badges" }, h("span", { class: "cell cell-git" }), h("span", { class: "cell cell-stage" }, stageCell), h("span", { class: "cell cell-diff" }, diffCell), h("span", { class: "cell cell-alt" }, altCell));
   }
@@ -218,13 +218,13 @@ export class FileTree {
       for (const z of tg.zipdirs) c.append(h("div", { class: "tree-item tree-dir", style: `--depth:${depth + 1}`, title: z.rel }, h("span", { class: "twisty" }), h("span", { class: "tree-name" }, z.name)));
       if (tg.files.length) {
         const base = tg.part.rel.replace(/index\.md$/, "");
-        c.append(this.group(`res:${chapter}/${tg.part.name}`, h("span", { class: "tree-name dim" }, `${de.tree.resources} (${tg.files.length})`), depth + 1, (rc) => this.plainFiles(tg.files, depth + 2, rc, base)));
+        c.append(this.group(`res:${chapter}/${tg.part.name}`, h("span", { class: "tree-name dim" }, `${ui.tree.resources} (${tg.files.length})`), depth + 1, (rc) => this.plainFiles(tg.files, depth + 2, rc, base)));
       }
     }, "", this.badges(tg.part));
   }
 
   private renderTree(index: CourseIndex) {
-    if (index.duplicateNames.length) this.list.append(h("div", { class: "tree-warning" }, de.tree.duplicates(index.duplicateNames)));
+    if (index.duplicateNames.length) this.list.append(h("div", { class: "tree-warning" }, ui.tree.duplicates(index.duplicateNames)));
     for (const ch of index.chapters) {
       this.list.append(
         this.group(`ch:${ch.part.name}`, this.partLabel(ch.part), 0, (c) => {
@@ -235,19 +235,19 @@ export class FileTree {
       );
     }
     if (index.glossary) {
-      this.list.append(this.fileRow(index.glossary.path, h("span", { class: "tree-label" }, h("span", { class: "tree-name" }, de.tree.glossary), h("span", { class: "tree-title" }, `${index.glossaryTerms.length} Begriffe`)), 0));
+      this.list.append(this.fileRow(index.glossary.path, h("span", { class: "tree-label" }, h("span", { class: "tree-name" }, ui.tree.glossary), h("span", { class: "tree-title" }, ui.tree.terms(index.glossaryTerms.length))), 0));
     }
     if (index.includeFiles.length) {
       const base = index.includeFiles[0].rel.replace(/_include\/.*$/, "_include/");
-      this.list.append(this.group("special:include", h("span", { class: "tree-name" }, de.tree.includes), 0, (c) => this.plainFiles(index.includeFiles, 1, c, base)));
+      this.list.append(this.group("special:include", h("span", { class: "tree-name" }, ui.tree.includes), 0, (c) => this.plainFiles(index.includeFiles, 1, c, base)));
     }
     const others = [...index.topFiles, ...index.unconfigured];
     if (others.length) {
       this.list.append(
-        this.group("special:other", h("span", { class: "tree-name" }, de.tree.otherFiles), 0, (c) => {
+        this.group("special:other", h("span", { class: "tree-name" }, ui.tree.otherFiles), 0, (c) => {
           this.plainFiles(index.topFiles, 1, c, "");
           if (index.unconfigured.length) {
-            c.append(h("div", { class: "tree-item tree-dir", style: "--depth:1" }, h("span", { class: "twisty" }), h("span", { class: "tree-name dim" }, de.tree.unconfigured)));
+            c.append(h("div", { class: "tree-item tree-dir", style: "--depth:1" }, h("span", { class: "twisty" }), h("span", { class: "tree-name dim" }, ui.tree.unconfigured)));
             this.plainFiles(index.unconfigured, 2, c, "");
           }
         }),
@@ -262,7 +262,7 @@ function emptyBadges() {
 
 /** The chapter's or taskgroup's own page (index.md), not a disabled entry. */
 function indexLabel() {
-  return h("span", { class: "tree-label tree-index", title: de.tree.indexTitle }, h("span", { class: "tree-icon" }, "≡"), h("span", { class: "tree-name" }, "index.md"));
+  return h("span", { class: "tree-label tree-index", title: ui.tree.indexTitle }, h("span", { class: "tree-icon" }, "≡"), h("span", { class: "tree-name" }, "index.md"));
 }
 
 function normalizeName(s: string) {

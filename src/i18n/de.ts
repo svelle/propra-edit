@@ -1,4 +1,5 @@
-// All UI strings in one place. German labels, proper typography („…“), no em dashes.
+// German UI strings (the reference table; en.ts has the same shape). German typography („…“),
+// no em dashes. Code reads strings through `ui` from ./index, which holds the active language.
 
 export const de = {
   appName: "ProPra Editor",
@@ -29,6 +30,7 @@ export const de = {
   tree: {
     filter: "Filtern (Name oder Titel)",
     glossary: "Glossar",
+    terms: (n: number) => `${n} ${n === 1 ? "Begriff" : "Begriffe"}`,
     includes: "_include",
     otherFiles: "Weitere Dateien",
     resources: "Ressourcen",
@@ -83,6 +85,9 @@ export const de = {
     title: "Einstellungen",
     courseRoot: "Kursordner",
     change: "Ändern …",
+    changeCourse: "Kursordner ändern …",
+    language: "Sprache der Oberfläche",
+    languageRestart: "Die neue Sprache gilt nach einem Neustart der App.",
     fontFamily: "Festbreitenschrift (Code, Makros, Top Matter)",
     fontSize: "Schriftgröße (px)",
     proportionalProse: "Fließtext in Proportionalschrift (Top Matter, Makros, Code und Tabellen bleiben in Festbreitenschrift)",
@@ -349,3 +354,5 @@ export const de = {
     enumBadge: (kind: string, n: number) => `${kind} ${n}`,
   },
 };
+
+export type Strings = typeof de;

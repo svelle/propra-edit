@@ -16,7 +16,8 @@ sedrila build with problems linked to files, git for the course repo and the alt
    setup `.exe`), or build it yourself (see `CLAUDE.md`).
 2. The builds are unsigned. macOS: right-click the app, „Öffnen“, then confirm.
    Windows: SmartScreen „Weitere Informationen“, then „Trotzdem ausführen“.
-3. On first start choose the course folder (the one containing `sedrila.yaml`).
+3. On first start choose the course folder (the one containing `sedrila.yaml`). The interface
+   is German by default; English can be chosen in the settings (⚙, „Sprache der Oberfläche“).
 4. For builds (Cmd/Strg+B), sedrila must be callable from your shell. If it lives in a venv
    or is run via `uv`, set the command in the settings (⚙, „sedrila-Befehl“) and use
    „sedrila testen“. The `SEDRILA_*` variables that propra-inf's `sedrila.yaml` needs are

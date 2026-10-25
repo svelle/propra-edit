@@ -5,7 +5,7 @@ import type { EditorView } from "@codemirror/view";
 import { linter, type Diagnostic } from "@codemirror/lint";
 import { propraDoc } from "../editor/propra-language";
 import { lintRefresh } from "../editor/refresh";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import { propraEnv } from "./env";
 import { includeKey, structuralLints, type IncludeStatus } from "./structural";
 import { locateProblem, problemMessage } from "../build/output";
@@ -43,7 +43,7 @@ export function structuralLinter(): Extension {
         const loc = locateProblem(text, p);
         const from = loc?.from ?? 0;
         const to = loc?.to ?? view.state.doc.line(1).to;
-        return { from, to: Math.max(to, from + 1), severity: p.severity, message: problemMessage(p), source: de.lint.sedrilaSource, markClass: "cm-pm-lint" };
+        return { from, to: Math.max(to, from + 1), severity: p.severity, message: problemMessage(p), source: ui.lint.sedrilaSource, markClass: "cm-pm-lint" };
       });
       return fromBuild.concat(findings
         .filter((f) => !silenced.has(f.id))
@@ -56,9 +56,9 @@ export function structuralLinter(): Extension {
           markClass: "cm-pm-lint",
           actions: [
             ...(f.id === "termref-unknown" || f.id === "topmatter-explains"
-              ? [{ name: de.lint.createTerm, apply: (v: EditorView, from: number, to: number) => env.createTerm(v.state.sliceDoc(from, to)) }]
+              ? [{ name: ui.lint.createTerm, apply: (v: EditorView, from: number, to: number) => env.createTerm(v.state.sliceDoc(from, to)) }]
               : []),
-            { name: de.lint.silence, apply: () => env.silence(f.id) },
+            { name: ui.lint.silence, apply: () => env.silence(f.id) },
           ],
         })));
     },

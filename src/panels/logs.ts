@@ -2,7 +2,7 @@
 // Reachable from the toolbar („Logs“) and by clicking the LanguageTool status.
 
 import type { LtStatus } from "../backend";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import { h, showDialog, toast } from "../ui/dom";
 
 export type LogTab = "app" | "languagetool";
@@ -30,13 +30,13 @@ export async function openLogs(deps: LogsDeps, initial: LogTab = "app") {
   const status = h("div", { class: "logs-status" });
   const dir = h("code", { class: "logs-dir" });
   const text = h("textarea", { class: "logs-text", readonly: true, spellcheck: "false", wrap: "off" }) as HTMLTextAreaElement;
-  const tabApp = h("button", { class: "bp-tab" }, de.logs.appLog);
-  const tabLt = h("button", { class: "bp-tab" }, de.logs.ltLog);
+  const tabApp = h("button", { class: "bp-tab" }, ui.logs.appLog);
+  const tabLt = h("button", { class: "bp-tab" }, ui.logs.ltLog);
 
   const renderStatus = () => {
     const st = deps.ltStatus();
     status.replaceChildren(
-      h("strong", {}, `${de.logs.ltState}: ${de.logs.states[st.state as keyof typeof de.logs.states] ?? st.state}`),
+      h("strong", {}, `${ui.logs.ltState}: ${ui.logs.states[st.state as keyof typeof ui.logs.states] ?? st.state}`),
       st.message ? h("pre", { class: "logs-message" }, st.message) : "",
     );
     status.className = `logs-status lt-${st.state}`;
@@ -45,7 +45,7 @@ export async function openLogs(deps: LogsDeps, initial: LogTab = "app") {
     tabApp.classList.toggle("active", tab === "app");
     tabLt.classList.toggle("active", tab === "languagetool");
     const content = tab === "app" ? data.app : data.languagetool;
-    text.value = content || de.logs.empty;
+    text.value = content || ui.logs.empty;
     dir.textContent = data.dir;
     renderStatus();
     requestAnimationFrame(() => (text.scrollTop = text.scrollHeight));
@@ -71,25 +71,25 @@ export async function openLogs(deps: LogsDeps, initial: LogTab = "app") {
   const actions = h(
     "div",
     { class: "logs-actions" },
-    btn(de.logs.copy, async () => {
+    btn(ui.logs.copy, async () => {
       const st = deps.ltStatus();
       // everything someone helping needs, in one paste
       const all = [
-        `${de.logs.ltState}: ${st.state}${st.message ? `\n${st.message}` : ""}`,
-        `${de.logs.folder}: ${data.dir}`,
-        `----- ${de.logs.appLog} -----`,
+        `${ui.logs.ltState}: ${st.state}${st.message ? `\n${st.message}` : ""}`,
+        `${ui.logs.folder}: ${data.dir}`,
+        `----- ${ui.logs.appLog} -----`,
         data.app.slice(-20000),
-        `----- ${de.logs.ltLog} -----`,
+        `----- ${ui.logs.ltLog} -----`,
         data.languagetool.slice(-20000),
       ].join("\n");
       await copyText(all, text);
-      toast(de.logs.copied);
+      toast(ui.logs.copied);
     }),
-    btn(de.logs.openFolder, () => deps.openDir().catch((e) => toast(String(e), "error"))),
-    btn(de.logs.reload, reload),
-    btn(de.logs.restartLt, async () => {
+    btn(ui.logs.openFolder, () => deps.openDir().catch((e) => toast(String(e), "error"))),
+    btn(ui.logs.reload, reload),
+    btn(ui.logs.restartLt, async () => {
       await deps.restartLt().catch((e) => toast(String(e), "error"));
-      toast(de.logs.restarting);
+      toast(ui.logs.restarting);
       window.setTimeout(() => void reload(), 1500);
     }),
   );
@@ -99,14 +99,14 @@ export async function openLogs(deps: LogsDeps, initial: LogTab = "app") {
     status,
     h("div", { class: "logs-tabs" }, tabApp, tabLt, h("span", { class: "spacer" }), actions),
     text,
-    h("div", { class: "form-hint" }, de.logs.folder, ": ", dir),
+    h("div", { class: "form-hint" }, ui.logs.folder, ": ", dir),
   );
   const timer = window.setInterval(renderStatus, 1000);
   void reload();
   await showDialog({
-    title: de.logs.title,
+    title: ui.logs.title,
     body,
-    buttons: [{ label: de.common.close, value: true, primary: true }],
+    buttons: [{ label: ui.common.close, value: true, primary: true }],
     cancelValue: true,
     onOpen: (root) => root.classList.add("dialog-wide"),
   });

@@ -14,7 +14,7 @@ import { parseMixed } from "@lezer/common";
 import { tags as t } from "@lezer/highlight";
 import type { MarkdownConfig } from "@lezer/markdown";
 import { DEFAULT_PARSER_CONFIG, parseProPra, type Block, type MacroCall, type ParserConfig, type ProPraDoc } from "./parser";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 
 export interface ProPraFileInfo {
   /** Part files (tasks, index.md, glossary.md) have top matter. */
@@ -119,7 +119,7 @@ class EnumBadge extends WidgetType {
     const el = document.createElement("span");
     el.className = `cm-pm-badge cm-pm-badge-${this.kind.toLowerCase()}`;
     el.textContent = String(this.n);
-    el.title = de.editor.enumBadge(this.kind, this.n);
+    el.title = ui.editor.enumBadge(this.kind, this.n);
     return el;
   }
   ignoreEvent() {

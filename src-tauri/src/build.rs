@@ -183,7 +183,7 @@ pub fn start(
 ) -> Result<u64, String> {
     let mut st = state.lock().unwrap();
     if st.running.is_some() {
-        return Err("Es läuft bereits ein Build".into());
+        return Err(crate::i18n::tr("Es läuft bereits ein Build", "A build is already running"));
     }
     st.next_id += 1;
     let id = st.next_id;
@@ -239,7 +239,7 @@ pub fn run_once(cmdline: &str, cwd: &Path) -> Result<String, String> {
     if out.status.success() {
         Ok(text)
     } else {
-        Err(format!("Exit-Code {}: {}", out.status.code().unwrap_or(-1), text.trim()))
+        Err(format!("{} {}: {}", crate::i18n::tr("Exit-Code", "Exit code"), out.status.code().unwrap_or(-1), text.trim()))
     }
 }
 

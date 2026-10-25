@@ -9,7 +9,7 @@ import { EditorView, ViewPlugin } from "@codemirror/view";
 import { ensureSyntaxTree } from "@codemirror/language";
 import { forceLinting, linter, type Action, type Diagnostic } from "@codemirror/lint";
 import { propraDoc } from "../editor/propra-language";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import { GrammarClient, type ChunkMatch } from "./client";
 import { buildMask, chunksOf, type Chunk } from "./mask";
 
@@ -110,11 +110,11 @@ export class GrammarService {
 
   private actions(chunk: Chunk, m: ChunkMatch): Action[] {
     const acts: Action[] = m.replacements.map((r) => ({
-      name: r === "" ? de.grammar.remove : r,
+      name: r === "" ? ui.grammar.remove : r,
       apply: (view, from, to) => view.dispatch({ changes: { from, to, insert: r } }),
     }));
     acts.push({
-      name: de.grammar.ignore,
+      name: ui.grammar.ignore,
       apply: () => {
         this.ignored.add(`${chunk.key}|${m.rel}|${m.ruleId}`);
         this.refresh();
@@ -122,7 +122,7 @@ export class GrammarService {
     });
     if (m.category === "spelling") {
       acts.push({
-        name: de.grammar.addToDictionary,
+        name: ui.grammar.addToDictionary,
         apply: () => {
           this.dictionary.add(m.word.trim().toLocaleLowerCase("de"));
           this.deps.saveDictionary([...this.dictionary]);
@@ -131,7 +131,7 @@ export class GrammarService {
       });
     }
     acts.push({
-      name: de.grammar.disableRule,
+      name: ui.grammar.disableRule,
       apply: () => {
         this.updateSettings({ ...this.settings, disabledRules: [...this.settings.disabledRules, m.ruleId] });
         this.deps.saveSettings(this.settings);

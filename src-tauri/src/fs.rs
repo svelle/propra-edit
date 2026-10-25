@@ -23,7 +23,7 @@ pub struct TextFile {
 }
 
 pub fn decode(bytes: &[u8]) -> Result<TextFile, String> {
-    let s = std::str::from_utf8(bytes).map_err(|e| format!("kein gültiges UTF-8: {e}"))?;
+    let s = std::str::from_utf8(bytes).map_err(|e| if crate::i18n::is_english() { format!("not valid UTF-8: {e}") } else { format!("kein gültiges UTF-8: {e}") })?;
     let (bom, s) = match s.strip_prefix(BOM) {
         Some(rest) => (true, rest),
         None => (false, s),

@@ -10,7 +10,7 @@ import { propraDoc } from "../editor/propra-language";
 import type { ProPraDoc } from "../editor/parser";
 import type { EnumKind } from "../editor/macros";
 import { setSlice, sliceField, SliceHost, syncAnnotation, type SliceRange } from "../editor/slice";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import { contentEnd, keyOf, pairSegments, segmentAltdir, solutionInsertion, type Segment } from "./segments";
 import { acceptNumbering, altdirChange, altdirEditSpec, altdirField, altdirLoad, numberingShift, renumberPlan, renumberSpec, type RenumberPlan } from "./state";
 
@@ -210,7 +210,7 @@ class SolutionWidget extends WidgetType {
     const toggle = document.createElement("button");
     toggle.className = "cm-sol-toggle";
     toggle.textContent = this.collapsed ? "▸" : "▾";
-    toggle.title = this.collapsed ? de.altdir.expand : de.altdir.collapse;
+    toggle.title = this.collapsed ? ui.altdir.expand : ui.altdir.collapse;
     toggle.addEventListener("click", () => {
       view.state.facet(altdirEnv)?.setCollapsed(this.key, !this.collapsed);
       view.dispatch({ effects: toggleCollapsed.of(this.key) });
@@ -222,7 +222,7 @@ class SolutionWidget extends WidgetType {
     if (this.addable && !this.ranges.length) {
       const add = document.createElement("button");
       add.className = "cm-sol-add";
-      add.textContent = de.altdir.add;
+      add.textContent = ui.altdir.add;
       add.addEventListener("click", () => addSolution(view, this.addable!.kind, this.addable!.n));
       head.append(add);
     }
@@ -297,7 +297,7 @@ function buildDecorations(state: EditorState): DecorationSet {
     // no EREF markers: show the whole file once, below the [INSTRUCTOR] that includes it
     const instr = doc.blocks.find((b) => b.name === "INSTRUCTOR" && b.close && doc.includes.some((c) => c.name === "INCLUDE" && /^ALT:/.test(c.args[0] ?? "") && c.from > b.open.from && c.to < b.close!.from));
     const pos = instr?.close ? instr.close.to : doc.text.length;
-    widget(Math.min(pos, state.doc.length), new SolutionWidget("fallback", de.altdir.wholeFile, [{ from: 0, to: text.length }], isCollapsed(state, "fallback"), null));
+    widget(Math.min(pos, state.doc.length), new SolutionWidget("fallback", ui.altdir.wholeFile, [{ from: 0, to: text.length }], isCollapsed(state, "fallback"), null));
     return Decoration.set(out, true);
   }
 
@@ -306,20 +306,20 @@ function buildDecorations(state: EditorState): DecorationSet {
   for (const e of doc.enumerations) {
     const key = keyOf(e.kind, e.number);
     const segs = pairing.byKey.get(key) ?? [];
-    widget(paragraphEnd(doc, e.call.line), new SolutionWidget(key, de.altdir.title(e.kind, e.number), segs.map((s) => segRange(text, s)), isCollapsed(state, key), { kind: e.kind, n: e.number }));
+    widget(paragraphEnd(doc, e.call.line), new SolutionWidget(key, ui.altdir.title(e.kind, e.number), segs.map((s) => segRange(text, s)), isCollapsed(state, key), { kind: e.kind, n: e.number }));
   }
   const sections: Section[] = [];
   for (const s of seg.segments) {
     if (contentEnd(text, s) === s.from && s.kind !== "solution") continue; // blank
-    if (s.kind === "preamble") sections.push({ key: "end:preamble", title: de.altdir.preamble, range: segRange(text, s) });
-    else if (s.kind === "other") sections.push({ key: `end:other@${s.from}`, title: de.altdir.other, range: segRange(text, s) });
+    if (s.kind === "preamble") sections.push({ key: "end:preamble", title: ui.altdir.preamble, range: segRange(text, s) });
+    else if (s.kind === "other") sections.push({ key: `end:other@${s.from}`, title: ui.altdir.other, range: segRange(text, s) });
   }
-  pairing.orphans.forEach((s, i) => sections.push({ key: `end:orphan:${s.key}#${i}`, title: de.altdir.orphan(s.key!), range: segRange(text, s) }));
+  pairing.orphans.forEach((s, i) => sections.push({ key: `end:orphan:${s.key}#${i}`, title: ui.altdir.orphan(s.key!), range: segRange(text, s) }));
   if (sections.length) {
     // stable keys: other@pos changes when text above changes, so key "other" by order instead
     let o = 0;
     for (const s of sections) if (s.key.startsWith("end:other@")) s.key = `end:other#${o++}`;
-    widget(state.doc.length, new SolutionWidget("end", de.altdir.endBox, [], isCollapsed(state, "end"), null, sections));
+    widget(state.doc.length, new SolutionWidget("end", ui.altdir.endBox, [], isCollapsed(state, "end"), null, sections));
   }
   return Decoration.set(out, true);
 }
@@ -345,7 +345,7 @@ function shiftMessage(state: EditorState): string | null {
   if (!state.field(altdirField, false)) return null;
   const shift = numberingShift(state);
   if (!shift) return null;
-  return de.altdir.shifted(shift.moved.map((m) => (m.from === m.to ? `${m.kind} ${m.from}` : `${m.kind} ${m.from} bis ${m.to}`)).join(", "));
+  return ui.altdir.shifted(shift.moved.map((m) => (m.from === m.to ? `${m.kind} ${m.from}` : `${m.kind} ${m.from} bis ${m.to}`)).join(", "));
 }
 
 function renumberPanel(view: EditorView): Panel {
@@ -354,7 +354,7 @@ function renumberPanel(view: EditorView): Panel {
   const msg = document.createElement("span");
   const fix = document.createElement("button");
   fix.className = "primary";
-  fix.textContent = de.altdir.renumber;
+  fix.textContent = ui.altdir.renumber;
   fix.addEventListener("click", async () => {
     const plan = renumberPlan(view.state);
     const env = view.state.facet(altdirEnv);
@@ -365,7 +365,7 @@ function renumberPanel(view: EditorView): Panel {
     view.dispatch(renumberSpec(view.state, plan));
   });
   const ignore = document.createElement("button");
-  ignore.textContent = de.altdir.ignore;
+  ignore.textContent = ui.altdir.ignore;
   ignore.addEventListener("click", () => view.dispatch({ effects: acceptNumbering.of(null) }));
   dom.append(msg, fix, ignore);
   const render = (s: EditorState) => (msg.textContent = s.field(shiftField) ?? "");

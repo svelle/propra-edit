@@ -9,7 +9,7 @@ import { parseProPra, type ParserConfig } from "../editor/parser";
 import { setSlice, SliceHost, syncAnnotation } from "../editor/slice";
 import { glossaryTerms, type GlossaryTerm } from "../glossary/model";
 import { fuzzyFilter } from "../fuzzy";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import { h } from "../ui/dom";
 
 export interface TermUsage {
@@ -37,7 +37,7 @@ export class GlossaryPanel {
   readonly dom: HTMLElement;
   private host: SliceHost;
   private view: EditorView | null = null;
-  private search = h("input", { type: "search", class: "rp-search", placeholder: de.glossary.search, spellcheck: "false" });
+  private search = h("input", { type: "search", class: "rp-search", placeholder: ui.glossary.search, spellcheck: "false" });
   private outline = h("div", { class: "rp-outline", role: "listbox" });
   private title = h("div", { class: "rp-term-title" });
   private editorHost = h("div", { class: "rp-editor" });
@@ -51,12 +51,12 @@ export class GlossaryPanel {
     this.search.addEventListener("keydown", (e) => {
       if (e.key === "Enter") this.outline.querySelector<HTMLElement>(".rp-item")?.click();
     });
-    const close = h("button", { class: "rp-close", title: de.common.close, "aria-label": de.common.close }, "×");
+    const close = h("button", { class: "rp-close", title: ui.common.close, "aria-label": ui.common.close }, "×");
     close.addEventListener("click", () => this.hide());
     this.dom = h(
       "aside",
       { class: "rightpanel", hidden: true },
-      h("div", { class: "rp-header" }, h("span", { class: "rp-heading" }, de.glossary.title), close),
+      h("div", { class: "rp-header" }, h("span", { class: "rp-heading" }, ui.glossary.title), close),
       this.search,
       this.outline,
       this.title,
@@ -159,7 +159,7 @@ export class GlossaryPanel {
 
   private renderTitle() {
     const t = this.find(this.current ?? undefined);
-    this.title.textContent = t ? (t.names.length > 1 ? `${t.names[0]} (${t.names.slice(1).join(", ")})` : t.names[0]) : de.glossary.noTerm;
+    this.title.textContent = t ? (t.names.length > 1 ? `${t.names[0]} (${t.names.slice(1).join(", ")})` : t.names[0]) : ui.glossary.noTerm;
   }
 
   private renderOutline() {
@@ -189,7 +189,7 @@ export class GlossaryPanel {
     }
     const names = new Set(t.names);
     const hits = all.filter((u) => names.has(u.term));
-    const header = h("div", { class: "rp-usages-title" }, de.glossary.usages(hits.length));
+    const header = h("div", { class: "rp-usages-title" }, ui.glossary.usages(hits.length));
     const list = hits.map((u) => {
       const el = h("div", { class: "rp-usage", title: u.rel }, h("span", { class: "rp-usage-file" }, u.rel.replace(/^[^/]+\//, "")), h("span", { class: "rp-usage-line" }, u.kind === "explains" ? "explains" : `Z. ${u.line + 1}`));
       el.addEventListener("click", () => this.deps.open(u.path, u.line));

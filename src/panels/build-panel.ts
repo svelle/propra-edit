@@ -2,7 +2,7 @@
 // files) and the colored console output.
 
 import { ansiSegments, BuildOutputParser, isShellNoise, problemMessage, stripAnsi, type BuildProblem, type BuildSummary } from "../build/output";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 import { h } from "../ui/dom";
 
 export interface BuildPanelDeps {
@@ -27,11 +27,11 @@ const MAX_LINES = 20000;
 export class BuildPanel {
   readonly dom: HTMLElement;
   private status = h("span", { class: "bp-status" });
-  private runBtn = h("button", { class: "tool" }, de.build.run);
-  private cancelBtn = h("button", { class: "tool" }, de.build.cancel);
-  private pageBtn = h("button", { class: "tool" }, de.build.openPage);
+  private runBtn = h("button", { class: "tool" }, ui.build.run);
+  private cancelBtn = h("button", { class: "tool" }, ui.build.cancel);
+  private pageBtn = h("button", { class: "tool" }, ui.build.openPage);
   private tabProblems = h("button", { class: "bp-tab active" });
-  private tabOutput = h("button", { class: "bp-tab" }, de.build.output);
+  private tabOutput = h("button", { class: "bp-tab" }, ui.build.output);
   private filter = h("select", { class: "bp-filter" }) as HTMLSelectElement;
   private problemsEl = h("div", { class: "bp-problems" });
   private outputEl = h("pre", { class: "bp-output", hidden: true });
@@ -47,9 +47,9 @@ export class BuildPanel {
 
   constructor(private deps: BuildPanelDeps) {
     for (const [v, label] of [
-      ["all", de.build.filterAll],
-      ["errors", de.build.filterErrors],
-      ["file", de.build.filterFile],
+      ["all", ui.build.filterAll],
+      ["errors", ui.build.filterErrors],
+      ["file", ui.build.filterFile],
     ] as [Filter, string][])
       this.filter.append(h("option", { value: v }, label));
     this.filter.addEventListener("change", () => this.renderProblems());
@@ -58,7 +58,7 @@ export class BuildPanel {
     this.pageBtn.addEventListener("click", () => deps.openPage());
     this.tabProblems.addEventListener("click", () => this.showTab("problems"));
     this.tabOutput.addEventListener("click", () => this.showTab("output"));
-    const close = h("button", { class: "rp-close", title: de.common.close, "aria-label": de.common.close }, "×");
+    const close = h("button", { class: "rp-close", title: ui.common.close, "aria-label": ui.common.close }, "×");
     close.addEventListener("click", () => this.hide());
     const grip = h("div", { class: "bp-grip" });
     grip.addEventListener("pointerdown", (e) => {
@@ -76,7 +76,7 @@ export class BuildPanel {
       "section",
       { class: "build-panel", hidden: true },
       grip,
-      h("div", { class: "bp-header" }, h("span", { class: "rp-heading" }, de.build.title), this.tabProblems, this.tabOutput, this.filter, this.status, h("span", { class: "spacer" }), this.runBtn, this.cancelBtn, this.pageBtn, close),
+      h("div", { class: "bp-header" }, h("span", { class: "rp-heading" }, ui.build.title), this.tabProblems, this.tabOutput, this.filter, this.status, h("span", { class: "spacer" }), this.runBtn, this.cancelBtn, this.pageBtn, close),
       this.problemsEl,
       this.outputEl,
     );
@@ -142,14 +142,14 @@ export class BuildPanel {
     let text: string;
     let cls = "";
     if (d.error) {
-      text = de.build.startFailed(d.error);
+      text = ui.build.startFailed(d.error);
       cls = "bp-bad";
-    } else if (d.cancelled) text = de.build.cancelled;
+    } else if (d.cancelled) text = ui.build.cancelled;
     else if (s.errorCount === null) {
-      text = de.build.noSummary(d.code);
+      text = ui.build.noSummary(d.code);
       cls = "bp-bad";
     } else {
-      text = de.build.done(s.errorCount, warnings, (d.elapsedMs / 1000).toFixed(1).replace(".", ","));
+      text = ui.build.done(s.errorCount, warnings, (d.elapsedMs / 1000).toFixed(1).replace(".", ","));
       cls = s.errorCount > 0 || errors > 0 ? "bp-bad" : "bp-good";
     }
     this.status.textContent = text;
@@ -168,7 +168,7 @@ export class BuildPanel {
 
   private tick() {
     const secs = Math.round((Date.now() - this.startedAt) / 1000);
-    this.status.textContent = de.build.running(secs);
+    this.status.textContent = ui.build.running(secs);
     this.status.className = "bp-status";
   }
 
@@ -232,9 +232,9 @@ export class BuildPanel {
     const rel = this.deps.activeRel();
     const shown = all.filter((p) => (f === "errors" ? p.severity === "error" : f === "file" ? p.file === rel : true));
     const errors = all.filter((p) => p.severity === "error").length;
-    this.tabProblems.textContent = de.build.problems(errors, all.length - errors);
+    this.tabProblems.textContent = ui.build.problems(errors, all.length - errors);
     if (!shown.length) {
-      this.problemsEl.replaceChildren(h("div", { class: "bp-empty" }, this.running ? de.build.waiting : all.length ? de.build.noneFiltered : de.build.none));
+      this.problemsEl.replaceChildren(h("div", { class: "bp-empty" }, this.running ? ui.build.waiting : all.length ? ui.build.noneFiltered : ui.build.none));
       return;
     }
     // errors first, then warnings; files in output order

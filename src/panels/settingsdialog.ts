@@ -1,12 +1,12 @@
 // Settings dialog: course root, editor font, soft wrap, grammar rules, sedrila build.
 
-import { de } from "../i18n/de";
+import { ui, UI_LANGUAGES } from "../i18n";
 import type { Settings } from "../settings";
 import { h, showDialog } from "../ui/dom";
 
 export interface SettingsResult {
   changeCourse: boolean;
-  values: Pick<Settings, "fontFamily" | "fontSize" | "wrapMode" | "wrapColumn" | "proportionalProse" | "proseFontFamily" | "grammarEnabled" | "ltDisabledRules" | "ltEnabledRules" | "buildCommand" | "buildOutDir" | "gitPath">;
+  values: Pick<Settings, "uiLanguage" | "fontFamily" | "fontSize" | "wrapMode" | "wrapColumn" | "proportionalProse" | "proseFontFamily" | "grammarEnabled" | "ltDisabledRules" | "ltEnabledRules" | "buildCommand" | "buildOutDir" | "gitPath">;
 }
 
 export interface SettingsDialogDeps {
@@ -17,10 +17,12 @@ export interface SettingsDialogDeps {
 export async function settingsDialog(s: Settings, deps: SettingsDialogDeps): Promise<SettingsResult | null> {
   const font = h("input", { type: "text", value: s.fontFamily, spellcheck: "false" });
   const size = h("input", { type: "number", min: 8, max: 40, value: s.fontSize });
+  const language = h("select", {}, ...UI_LANGUAGES.map((l) => h("option", { value: l.id }, l.label))) as HTMLSelectElement;
+  language.value = s.uiLanguage;
   const proportional = h("input", { type: "checkbox" });
   proportional.checked = s.proportionalProse;
   const proseFont = h("input", { type: "text", value: s.proseFontFamily, spellcheck: "false" });
-  const wrapMode = h("select", {}, h("option", { value: "column" }, de.settings.wrapColumnMode), h("option", { value: "window" }, de.settings.wrapWindow), h("option", { value: "off" }, de.settings.wrapOff)) as HTMLSelectElement;
+  const wrapMode = h("select", {}, h("option", { value: "column" }, ui.settings.wrapColumnMode), h("option", { value: "window" }, ui.settings.wrapWindow), h("option", { value: "off" }, ui.settings.wrapOff)) as HTMLSelectElement;
   wrapMode.value = s.wrapMode;
   const wrapColumn = h("input", { type: "number", min: 40, max: 400, value: s.wrapColumn });
   const syncWrap = () => ((wrapColumn as HTMLInputElement).disabled = wrapMode.value !== "column");
@@ -33,17 +35,17 @@ export async function settingsDialog(s: Settings, deps: SettingsDialogDeps): Pro
   grammar.checked = s.grammarEnabled;
   const disabled = h("input", { type: "text", value: s.ltDisabledRules.join(", "), spellcheck: "false" });
   const enabled = h("input", { type: "text", value: s.ltEnabledRules.join(", "), spellcheck: "false" });
-  const buildCmd = h("input", { type: "text", value: s.buildCommand, placeholder: de.settings.buildCommandDefault, spellcheck: "false" });
+  const buildCmd = h("input", { type: "text", value: s.buildCommand, placeholder: ui.settings.buildCommandDefault, spellcheck: "false" });
   const outDir = h("input", { type: "text", value: s.buildOutDir, spellcheck: "false" });
   void deps.defaultOutDir().then((d) => (outDir.placeholder = d), () => {});
   const gitPath = h("input", { type: "text", value: s.gitPath, placeholder: "git", spellcheck: "false" });
   const testResult = h("div", { class: "form-hint" });
-  const testBtn = h("button", { type: "button" }, de.settings.testSedrila);
+  const testBtn = h("button", { type: "button" }, ui.settings.testSedrila);
   testBtn.addEventListener("click", () => {
-    testResult.textContent = de.settings.testing;
+    testResult.textContent = ui.settings.testing;
     testResult.classList.remove("form-error");
     deps.testSedrila(buildCmd.value).then(
-      (out) => (testResult.textContent = de.settings.testOk(out.trim().split("\n").pop() ?? "")),
+      (out) => (testResult.textContent = ui.settings.testOk(out.trim().split("\n").pop() ?? "")),
       (e) => {
         testResult.textContent = String(e);
         testResult.classList.add("form-error");
@@ -53,30 +55,31 @@ export async function settingsDialog(s: Settings, deps: SettingsDialogDeps): Pro
   const body = h(
     "div",
     { class: "form" },
-    h("div", { class: "form-row" }, h("span", {}, de.settings.courseRoot), h("code", { class: "form-path" }, s.courseRoot ?? "–")),
-    h("label", {}, de.settings.fontFamily, font),
-    h("label", {}, de.settings.fontSize, size),
-    h("label", { class: "checkbox" }, proportional, de.settings.proportionalProse),
-    h("label", {}, de.settings.proseFont, proseFont),
-    h("div", { class: "form-row form-inline" }, h("label", {}, de.settings.wrap, wrapMode), h("label", {}, de.settings.wrapColumn, wrapColumn)),
-    h("label", { class: "checkbox" }, grammar, de.settings.grammar),
-    h("label", {}, de.settings.disabledRules, disabled),
-    h("label", {}, de.settings.enabledRules, enabled),
-    h("div", { class: "form-hint" }, de.settings.rulesHint),
-    h("label", {}, de.settings.buildCommand, buildCmd),
-    h("div", { class: "form-hint" }, de.settings.buildCommandHint),
-    h("label", {}, de.settings.buildOutDir, outDir),
+    h("div", { class: "form-row" }, h("span", {}, ui.settings.courseRoot), h("code", { class: "form-path" }, s.courseRoot ?? "–")),
+    h("label", {}, ui.settings.language, language),
+    h("label", {}, ui.settings.fontFamily, font),
+    h("label", {}, ui.settings.fontSize, size),
+    h("label", { class: "checkbox" }, proportional, ui.settings.proportionalProse),
+    h("label", {}, ui.settings.proseFont, proseFont),
+    h("div", { class: "form-row form-inline" }, h("label", {}, ui.settings.wrap, wrapMode), h("label", {}, ui.settings.wrapColumn, wrapColumn)),
+    h("label", { class: "checkbox" }, grammar, ui.settings.grammar),
+    h("label", {}, ui.settings.disabledRules, disabled),
+    h("label", {}, ui.settings.enabledRules, enabled),
+    h("div", { class: "form-hint" }, ui.settings.rulesHint),
+    h("label", {}, ui.settings.buildCommand, buildCmd),
+    h("div", { class: "form-hint" }, ui.settings.buildCommandHint),
+    h("label", {}, ui.settings.buildOutDir, outDir),
     h("div", { class: "form-row" }, testBtn),
     testResult,
-    h("label", {}, de.git.gitPath, gitPath),
+    h("label", {}, ui.git.gitPath, gitPath),
   );
   const choice = await showDialog<"ok" | "cancel" | "course">({
-    title: de.settings.title,
+    title: ui.settings.title,
     body,
     buttons: [
-      { label: `${de.settings.courseRoot} ${de.settings.change}`, value: "course" },
-      { label: de.common.cancel, value: "cancel" },
-      { label: de.common.ok, value: "ok", primary: true },
+      { label: ui.settings.changeCourse, value: "course" },
+      { label: ui.common.cancel, value: "cancel" },
+      { label: ui.common.ok, value: "ok", primary: true },
     ],
     cancelValue: "cancel",
   });
@@ -87,6 +90,7 @@ export async function settingsDialog(s: Settings, deps: SettingsDialogDeps): Pro
     values: {
       fontFamily: font.value.trim() || s.fontFamily,
       fontSize: Number.isFinite(n) && n >= 8 && n <= 40 ? n : s.fontSize,
+      uiLanguage: language.value as Settings["uiLanguage"],
       wrapMode: wrapMode.value as Settings["wrapMode"],
       wrapColumn: clampInt(Number(wrapColumn.value), 40, 400, s.wrapColumn),
       proportionalProse: proportional.checked,

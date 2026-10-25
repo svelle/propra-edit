@@ -2,7 +2,7 @@
 
 import { EditorView, type KeyBinding } from "@codemirror/view";
 import { forEachDiagnostic, type Action, type Diagnostic } from "@codemirror/lint";
-import { de } from "../i18n/de";
+import { ui } from "../i18n";
 
 interface Item {
   diagnostic: Diagnostic;
@@ -46,7 +46,7 @@ export function openQuickFix(view: EditorView): boolean {
     if (!items.length) {
       const e = document.createElement("div");
       e.className = "quickfix-empty";
-      e.textContent = de.quickFix.none;
+      e.textContent = ui.quickFix.none;
       menu.append(e);
       return;
     }
