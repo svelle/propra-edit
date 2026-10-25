@@ -2,7 +2,7 @@
 // reacting to external file changes.
 
 import { EditorView, type ViewUpdate } from "@codemirror/view";
-import { EditorState, type Text } from "@codemirror/state";
+import { EditorState, Text } from "@codemirror/state";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { backend, events, type CourseIndex, type LtStatus, type TextFile } from "./backend";
@@ -14,6 +14,9 @@ import { embeddedEditorExtensions } from "./editor/setup";
 import { syncAnnotation } from "./editor/slice";
 import { glossaryTerms, termInsertion } from "./glossary/model";
 import { GlossaryPanel, type TermUsage } from "./panels/glossary-panel";
+import { altdirField, altdirLoad, altdirStateExtension, type AltdirDoc, type RenumberPlan } from "./altdir/state";
+import { altdirViewExtension, setSolutionsVisible, type AltdirEnv } from "./altdir/widgets";
+import { applyChanges, type TextChange } from "./altdir/segments";
 import { diagnosticCount, forceLinting, openLintPanel } from "@codemirror/lint";
 import { lintRefresh } from "./editor/refresh";
 import { propraAssist } from "./lint/assist";
@@ -43,6 +46,17 @@ interface Tab {
   scrollTop: number;
   deleted: boolean;
   wrap: boolean;
+  /** The task's solution file in altdir (shown inline), if any. */
+  alt: AltTab | null;
+}
+
+interface AltTab {
+  path: string;
+  exists: boolean;
+  savedDoc: Text;
+  diskText: string;
+  eol: "\n" | "\r\n";
+  bom: boolean;
 }
 
 const MINIMAL_TEMPLATE = 'title: ""\nstage: draft\ntimevalue: 1.0\ndifficulty: 2\n---\n\n[SECTION::goal::idea]\n\n[ENDSECTION]\n';
@@ -164,6 +178,7 @@ export class App {
       btn(de.toolbar.save, `${de.toolbar.save} (${modKey()}+S)`, () => void this.saveActive()),
       btn(de.toolbar.quickOpen, `${de.toolbar.quickOpen} (${modKey()}+P)`, () => this.quickOpen()),
       btn(de.glossary.toolbar, de.glossary.toolbarTitle, () => void this.toggleGlossary()),
+      btn(de.altdir.toolbar, de.altdir.toolbarTitle, () => this.toggleSolutions()),
       h("span", { class: "spacer" }),
       btn("⚙", de.toolbar.settings, () => void this.openSettings()),
     );
@@ -402,11 +417,17 @@ export class App {
   }
 
   private isDirty(tab: Tab) {
-    return !tab.state.doc.eq(tab.savedDoc) || tab.deleted;
+    return !tab.state.doc.eq(tab.savedDoc) || tab.deleted || this.altDirty(tab);
   }
 
-  private makeState(tab: { path: string }, text: string): EditorState {
+  private altDirty(tab: Tab): boolean {
+    const alt = tab.alt && tab.state.field(altdirField, false);
+    return !!alt && !alt.doc.eq(tab.alt!.savedDoc);
+  }
+
+  private makeState(tab: { path: string }, text: string, alt: AltdirDoc | null = null): EditorState {
     const isMarkdown = tab.path.toLowerCase().endsWith(".md");
+    const altExt = alt ? [altdirStateExtension(alt), altdirViewExtension(this.makeAltdirEnv(tab.path, alt.path))] : [];
     return createState(text, {
       path: tab.path,
       isMarkdown,
@@ -414,8 +435,57 @@ export class App {
       parserConfig: parserConfigFor(this.index),
       softWrap: this.settings.softWrap,
       extra: EditorView.updateListener.of((u: ViewUpdate) => this.onEditorUpdate(u)),
-      markdownExtra: [propraEnv.of(this.makeEnv(tab.path)), structuralLinter(), propraAssist(), this.grammar.extension()],
+      markdownExtra: [propraEnv.of(this.makeEnv(tab.path)), structuralLinter(), propraAssist(), this.grammar.extension(), altExt],
     });
+  }
+
+  private makeAltdirEnv(taskPath: string, altPath: string): AltdirEnv {
+    const rel = () => (this.index && findPartByPath(this.index, taskPath)?.rel) || taskPath;
+    return {
+      editorExtensions: () => embeddedEditorExtensions(parserConfigFor(this.index), false, [propraEnv.of(this.makeEnv(altPath)), propraAssist(), this.grammar.extension()]),
+      isCollapsed: (key) => (this.settings.solutionCollapsed[rel()] ?? []).includes(key),
+      setCollapsed: (key, collapsed) => {
+        const r = rel();
+        const list = new Set(this.settings.solutionCollapsed[r] ?? []);
+        if (collapsed) list.add(key);
+        else list.delete(key);
+        this.settings.solutionCollapsed[r] = [...list];
+        saveSettings(this.settings);
+      },
+      showSolutions: () => this.settings.showSolutions,
+      confirmRenumber: (plan, state) => this.confirmRenumber(plan, state),
+    };
+  }
+
+  private async confirmRenumber(plan: RenumberPlan, state: EditorState): Promise<boolean> {
+    const altText = state.field(altdirField, false)?.doc.toString() ?? "";
+    const section = (label: string, text: string, changes: TextChange[]) => {
+      const after = applyChanges(text, changes);
+      const a = text.split("\n");
+      const b = after.split("\n");
+      const rows: Node[] = [];
+      for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        if (a[i] === b[i]) continue;
+        rows.push(h("div", { class: "diff-del" }, `${i + 1}  − ${a[i] ?? ""}`), h("div", { class: "diff-add" }, `${i + 1}  + ${b[i] ?? ""}`));
+      }
+      return h("div", { class: "diff-file" }, h("div", { class: "diff-title" }, label), ...(rows.length ? rows : [h("div", { class: "form-hint" }, de.altdir.noChanges)]));
+    };
+    const body = h("div", { class: "diff" }, h("p", {}, de.altdir.confirmText), section(de.altdir.taskFile, state.doc.toString(), plan.task), section(de.altdir.altFile, altText, plan.altdir));
+    return showDialog({
+      title: de.altdir.confirmTitle,
+      body,
+      buttons: [
+        { label: de.common.cancel, value: false },
+        { label: de.altdir.confirm, value: true, primary: true },
+      ],
+      cancelValue: false,
+    });
+  }
+
+  private toggleSolutions() {
+    this.settings.showSolutions = !this.settings.showSolutions;
+    saveSettings(this.settings);
+    if (this.active?.alt) this.view.dispatch({ effects: setSolutionsVisible.of(this.settings.showSolutions) });
   }
 
   private fileKind(path: string): FileKind {
@@ -492,11 +562,24 @@ export class App {
     }
     const part = this.index ? findPartByPath(this.index, path) : undefined;
     const rel = part?.rel ?? openableItems(this.index ?? emptyIndex()).find((i) => i.path === path)?.rel ?? path;
+    let alt: AltTab | null = null;
+    if (part?.kind === "task" && part.altdirPath && this.index?.altdirAvailable) {
+      let altFile: TextFile = { text: "", eol: file.eol, bom: false, mixedEol: false };
+      let exists = false;
+      try {
+        altFile = await backend.readTextFile(part.altdirPath);
+        exists = true;
+      } catch {
+        /* no solution file yet: created on save */
+      }
+      alt = { path: part.altdirPath, exists, savedDoc: Text.of(altFile.text.split("\n")), diskText: altFile.text, eol: altFile.eol, bom: altFile.bom };
+    }
     const tab: Tab = {
       path,
       name: baseName(path),
       rel,
-      state: this.makeState({ path }, file.text),
+      alt,
+      state: this.makeState({ path }, file.text, alt ? { path: alt.path, doc: alt.savedDoc, exists: alt.exists } : null),
       savedDoc: null as unknown as Text,
       diskText: file.text,
       eol: file.eol,
@@ -527,6 +610,7 @@ export class App {
       this.active.state = this.view.state;
     }
     this.active = tab;
+    if (tab.alt) tab.state = tab.state.update({ effects: setSolutionsVisible.of(this.settings.showSolutions) }).state;
     if (tab.wrap !== this.settings.softWrap) {
       tab.state = tab.state.update({ effects: wrapCompartment.reconfigure(this.settings.softWrap ? EditorView.lineWrapping : []) }).state;
       tab.wrap = this.settings.softWrap;
@@ -614,7 +698,7 @@ export class App {
   private onEditorUpdate(u: ViewUpdate) {
     const tab = this.active;
     if (!tab || u.state !== this.view.state) return;
-    if (u.docChanged) {
+    if (u.docChanged || u.transactions.some((t) => t.effects.length)) {
       const dirty = this.isDirty(tab);
       if (this.lastDirty.get(tab) !== dirty) {
         this.lastDirty.set(tab, dirty);
@@ -652,6 +736,24 @@ export class App {
     tab.savedDoc = doc;
     tab.diskText = text;
     tab.deleted = false;
+    const altDoc = tab.alt && tab.state.field(altdirField, false)?.doc;
+    if (tab.alt && altDoc && (this.altDirty(tab) || (!tab.alt.exists && altDoc.length > 0))) {
+      const altText = altDoc.toString();
+      try {
+        if (tab.alt.exists) await backend.writeTextFile(tab.alt.path, altText, tab.alt.eol, tab.alt.bom);
+        else {
+          await backend.createFile(tab.alt.path, altText);
+          tab.alt.exists = true;
+          toast(de.altdir.created(tab.alt.path));
+        }
+        tab.alt.savedDoc = altDoc;
+        tab.alt.diskText = altText;
+      } catch (e) {
+        toast(de.file.saveFailed(String(e)), "error");
+        this.renderTabs();
+        return false;
+      }
+    }
     this.lastDirty.set(tab, this.isDirty(tab));
     this.renderTabs();
     toast(de.file.saved(tab.name));
@@ -704,6 +806,7 @@ export class App {
     this.usagesCache = null;
     const gp = this.index?.glossary?.path;
     if (gp && changed.has(gp) && !this.glossaryTab()) void this.loadGlossaryFromDisk();
+    for (const tab of this.tabs) if (tab.alt && changed.has(tab.alt.path)) await this.onAltdirChanged(tab);
     if (this.includeCache.size) {
       this.includeCache.clear();
       this.refreshLints();
@@ -742,6 +845,40 @@ export class App {
       }
       this.replaceContent(tab, file);
     }
+  }
+
+  /** The solution file of an open task changed on disk. */
+  private async onAltdirChanged(tab: Tab) {
+    const alt = tab.alt!;
+    let file: TextFile;
+    try {
+      file = await backend.readTextFile(alt.path);
+    } catch {
+      return; // deleted: keep the in-memory version; saving recreates it
+    }
+    if (file.text === alt.diskText) return;
+    if (tab === this.active) tab.state = this.view.state;
+    if (this.altDirty(tab)) {
+      const reload = await showDialog({
+        title: de.file.externalChangeTitle,
+        body: de.altdir.externalChange(tab.name),
+        buttons: [
+          { label: de.file.keepMine, value: false },
+          { label: de.file.reload, value: true, primary: true },
+        ],
+        cancelValue: false,
+      });
+      alt.diskText = file.text;
+      if (!reload) return;
+    } else {
+      toast(de.altdir.reloaded(tab.name));
+    }
+    const doc = Text.of(file.text.split("\n"));
+    Object.assign(alt, { exists: true, savedDoc: doc, diskText: file.text, eol: file.eol, bom: file.bom });
+    const spec = { effects: altdirLoad.of({ path: alt.path, doc, exists: true }), annotations: Transaction.addToHistory.of(false) };
+    if (tab === this.active) this.view.dispatch(spec);
+    else tab.state = tab.state.update(spec).state;
+    this.renderTabs();
   }
 
   /** Replace a tab's content with disk content as one undoable transaction. */
@@ -814,6 +951,7 @@ export class App {
         else if (key === "p" && !e.shiftKey) this.quickOpen();
         else if (key === "w" && !e.shiftKey) this.active && void this.closeTab(this.active);
         else if (key === "n" && !e.shiftKey) void this.newTask();
+        else if (key === "l" && e.shiftKey) this.toggleSolutions();
         else if (e.key === "Tab" && e.ctrlKey && this.tabs.length > 1 && this.active) {
           const i = this.tabs.indexOf(this.active);
           this.activate(this.tabs[(i + (e.shiftKey ? -1 : 1) + this.tabs.length) % this.tabs.length]);

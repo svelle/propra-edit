@@ -12,6 +12,10 @@ export interface Settings {
   fontFamily: string;
   fontSize: number;
   softWrap: boolean;
+  /** Inline altdir solutions shown. */
+  showSolutions: boolean;
+  /** Collapsed solution boxes per file (key: path relative to the course root). */
+  solutionCollapsed: Record<string, string[]>;
   grammarEnabled: boolean;
   ltDisabledRules: string[];
   ltEnabledRules: string[];
@@ -32,6 +36,8 @@ export const DEFAULT_SETTINGS: Settings = {
   fontFamily: 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace',
   fontSize: 14,
   softWrap: true,
+  showSolutions: true,
+  solutionCollapsed: {},
   grammarEnabled: true,
   ltDisabledRules: ["WHITESPACE_RULE"],
   ltEnabledRules: [],

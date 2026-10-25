@@ -259,3 +259,38 @@ Still to do: the same measurements on macOS and Windows (the user's machines).
   `explains:` (Rust, `course/usages.rs`); cached until the next file change.
 - A global error handler shows unexpected JavaScript errors as a toast (the webview console
   is not reachable in release builds).
+
+## Phase 5: inline altdir solutions
+
+- **Segments** (`src/altdir/segments.ts`): a solution starts at a line whose first token is
+  `[EREFx::n]` (after an optional list marker or heading #s) and runs to the next marker line;
+  a heading ends a list-item segment, and a heading of equal or higher level ends a
+  heading-style segment. Fenced code is skipped. Text before the first marker is the preamble;
+  text after a closing heading is an "other" segment. Verified with the real `git-Repository`
+  solution file (list items, unindented continuation lines) and the fixture variants.
+- **Document model:** the solution file is a state field inside the task's EditorState,
+  changed only via an effect that `invertedEffects` makes undoable. Edits in the inline
+  editors are applied with `addToHistory: false` (each inline editor has its own undo);
+  renumbering and „+ Lösung anlegen“ are undoable in the task editor. Renumbering changes both
+  documents in one transaction, so one undo reverts both, and also restores the "accepted
+  numbering" so the warning comes back.
+- **Inline editors** are slice editors (as in the glossary panel) on the solution document,
+  mounted inside block widgets after the paragraph of each enumeration. Widgets keep their
+  DOM while only ranges change. Spacing uses padding, not margins: CodeMirror measures block
+  widgets with offsetHeight, and margins shifted the line numbers.
+- **Enumeration identity:** positions of `[EC]/[EQ]/[ER]` are mapped through every change; the
+  numbering at load (or after renumbering/„Ignorieren“) is the baseline. A warning bar appears
+  when an existing enumeration's number differs from the baseline. Renumbering rewrites
+  `[EREFx::old]` → `[EREFx::new]` simultaneously in the solution file and in the task (e.g.
+  INSTRUCTOR text), after a diff preview. Deleted enumerations keep their solutions' numbers
+  (they then show up as orphans or doubles); `_include` files are never rewritten.
+- **Display:** every enumeration gets a box, also those without a solution („+ Lösung
+  anlegen“ inserts `- [EREFx::n] ` in number order, in the style of the neighbouring markers).
+  Orphaned solutions, the preamble and "other" parts are in one box at the end of the task.
+  A file without markers is shown once, below the `[INSTRUCTOR]` that includes `ALT:`.
+- **Saving:** Cmd/Ctrl+S saves the task and, if changed, the solution file (created, including
+  missing directories, if it did not exist). The tab's unsaved marker covers both. External
+  changes to the solution file reload silently when it is clean, otherwise ask.
+- **Toggle:** toolbar „Lösungen“ or Cmd/Ctrl+Shift+L; collapsed boxes are remembered per file.
+- **Open question decided by default:** solutions are shown only below the enumerations, not
+  next to `[EREFx]` references in `[INSTRUCTOR]` text.

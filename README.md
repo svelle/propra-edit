@@ -31,4 +31,5 @@ structural lints, top matter assistance, glossary panel, inline altdir solutions
 | Cmd/Strg+Shift+M | Problemliste |
 | F8 | Nächstes Problem |
 | F12 / Cmd/Strg+Klick | Zur Definition (Part, Glossarbegriff, eingebundene Datei) |
+| Cmd/Strg+Shift+L | Lösungen (altdir) ein-/ausblenden |
 | Cmd/Strg+Alt+[ / ] | Block falten / entfalten |
