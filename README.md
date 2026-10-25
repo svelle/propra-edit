@@ -44,6 +44,7 @@ logs. „Alles kopieren“ copies both, ready to paste into a bug report.
 | F8 | Nächstes Problem |
 | F12 / Cmd/Strg+Klick | Zur Definition (Part, Glossarbegriff, eingebundene Datei) |
 | Cmd/Strg+Shift+L | Lösungen (altdir) ein-/ausblenden |
+| Cmd/Strg+Alt+L | Zwischen Aufgabe und Lösungsdatei wechseln (auch: Klick auf „L“ im Dateibaum, ↗ an einer Lösung) |
 | Cmd/Strg+B | Kurs mit sedrila bauen |
 | Cmd/Strg+Shift+G | Git-Seitenleiste (Vormerken, Commit, Pull, Push) |
 | Cmd/Strg+Shift+D | Änderungen der aktuellen Datei gegenüber HEAD |

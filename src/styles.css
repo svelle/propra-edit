@@ -201,7 +201,7 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .tree { overflow: auto; flex: 1; padding-bottom: 20px; }
 .tree-item {
   display: flex; align-items: center; gap: 4px;
-  padding: 2px 8px 2px calc(6px + var(--depth, 0) * 18px);
+  padding: 2px 16px 2px calc(6px + var(--depth, 0) * 18px); /* right: keep the columns clear of the scrollbar */
   cursor: pointer; white-space: nowrap; user-select: none;
 }
 /* indent guides */
@@ -631,3 +631,8 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 /* collapsed file tree: no sidebar, no resize handle */
 .sidebar[hidden], .sidebar[hidden] + .sidebar-resizer { display: none; }
 .toolbar .tool.toggle.icon-only[aria-pressed="true"]::before { content: none; }
+.altdir-marker { cursor: pointer; }
+.altdir-marker:hover { background: var(--bg-active); }
+.cm-sol-open { margin-left: auto; background: none; border: none; padding: 0 6px; color: var(--fg-dim); font-size: 13px; cursor: pointer; }
+.cm-sol-open:hover { color: var(--fg); background: var(--bg-hover); }
+.cm-sol-add + .cm-sol-open { margin-left: 4px; }

@@ -12,6 +12,8 @@ export interface FileTreeCallbacks {
   /** Called with (chapter, taskgroup) when the user selects something inside a taskgroup. */
   selectTaskgroup(chapter: string, taskgroup: string): void;
   expandedChanged(expanded: string[]): void;
+  /** Open (or offer to create) the altdir solution file of a task. */
+  openSolution(taskPath: string): void;
 }
 
 /** Git state of a file in the tree: own change and/or a changed altdir solution. */
@@ -177,6 +179,11 @@ export class FileTree {
       p.kind === "task" && this.index?.altdirAvailable
         ? h("span", { class: `altdir-marker ${p.altdirExists ? "yes" : "no"}`, title: p.altdirExists ? ui.tree.hasAltdir : ui.tree.noAltdir }, p.altdirExists ? "L" : "")
         : null;
+    // click on the marker: open the solution file (or create it)
+    altCell?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.cb.openSolution(p.path);
+    });
     return h("span", { class: "tree-badges" }, h("span", { class: "cell cell-git" }), h("span", { class: "cell cell-stage" }, stageCell), h("span", { class: "cell cell-diff" }, diffCell), h("span", { class: "cell cell-alt" }, altCell));
   }
 

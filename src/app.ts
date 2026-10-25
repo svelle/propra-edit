@@ -6,7 +6,7 @@ import { EditorState, Text } from "@codemirror/state";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { backend, events, type CourseIndex, type LtStatus, type TextFile } from "./backend";
-import { findPartByPath, hasTopMatter, openableItems, parserConfigFor, partNames } from "./course";
+import { findPartByPath, findTaskBySolution, hasTopMatter, openableItems, parserConfigFor, partNames } from "./course";
 import { GrammarService } from "./grammar/grammar";
 import { ChangeSet, EditorSelection, Transaction } from "@codemirror/state";
 import { parseProPra } from "./editor/parser";
@@ -137,6 +137,7 @@ export class App {
     this.tree = new FileTree(
       {
         open: (p) => void this.openFile(p),
+        openSolution: (p) => void this.openSolutionOf(p),
         selectTaskgroup: (chapter, taskgroup) => (this.selectedTaskgroup = { chapter, taskgroup }),
         expandedChanged: (exp) => {
           this.settings.treeExpanded = exp;
@@ -643,6 +644,7 @@ export class App {
   private makeAltdirEnv(taskPath: string, altPath: string): AltdirEnv {
     const rel = () => (this.index && findPartByPath(this.index, taskPath)?.rel) || taskPath;
     return {
+      openFile: (offset) => void this.openSolutionOf(taskPath, offset),
       editorExtensions: () => embeddedEditorExtensions(parserConfigFor(this.index), false, [propraEnv.of(this.makeEnv(altPath)), propraAssist(), this.grammar.extension()]),
       isCollapsed: (key) => (this.settings.solutionCollapsed[rel()] ?? []).includes(key),
       setCollapsed: (key, collapsed) => {
@@ -785,6 +787,59 @@ export class App {
     this.view.focus();
   }
 
+  /** Tab label: file name without .md; solution files say so (they share the task's name). */
+  private tabLabel(t: Tab): string {
+    const name = t.name.replace(/\.md$/i, "");
+    return this.index && findTaskBySolution(this.index, t.path) ? ui.altdir.tabLabel(name) : name;
+  }
+
+  /** Open the altdir solution file of a task as its own tab; offer to create a missing one. */
+  private async openSolutionOf(taskPath: string, offset?: number) {
+    const part = this.index ? findPartByPath(this.index, taskPath) : undefined;
+    if (!part?.altdirPath || !this.index?.altdirAvailable) return toast(ui.altdir.noSolutionPath, "error");
+    // the task tab edits the same file inline: save those edits first so both views agree
+    const taskTab = this.tabs.find((t) => t.path === taskPath);
+    if (taskTab) {
+      if (taskTab === this.active) taskTab.state = this.view.state;
+      if (this.altDirty(taskTab) && !(await this.saveTab(taskTab))) return;
+    }
+    if (!(await backend.pathExists(part.altdirPath).catch(() => false))) {
+      const create = await showDialog({
+        title: ui.altdir.createTitle,
+        body: ui.altdir.createText(part.name),
+        buttons: [
+          { label: ui.common.cancel, value: false },
+          { label: ui.altdir.createButton, value: true, primary: true },
+        ],
+        cancelValue: false,
+      });
+      if (!create) return;
+      try {
+        await backend.createFile(part.altdirPath, "");
+      } catch (e) {
+        return toast(String(e), "error");
+      }
+    }
+    const tab = await this.openFile(part.altdirPath);
+    if (offset !== undefined && tab && tab === this.active) {
+      const pos = Math.min(offset, this.view.state.doc.length);
+      this.scrollToken++;
+      this.view.dispatch({ selection: EditorSelection.cursor(pos), effects: EditorView.scrollIntoView(pos, { y: "start", yMargin: 60 }) });
+      this.view.focus();
+    }
+  }
+
+  /** Cmd/Ctrl+Alt+L: from a task to its solution file and back. */
+  private async switchTaskSolution() {
+    const tab = this.active;
+    if (!tab || !this.index) return;
+    const task = findTaskBySolution(this.index, tab.path);
+    if (task) return void (await this.openFile(task.path));
+    const part = findPartByPath(this.index, tab.path);
+    if (part?.kind === "task") return this.openSolutionOf(tab.path);
+    toast(ui.altdir.notATask);
+  }
+
   private toggleSidebar() {
     this.sidebar.hidden = !this.sidebar.hidden;
     this.settings.sidebarVisible = !this.sidebar.hidden;
@@ -888,7 +943,10 @@ export class App {
       return null;
     }
     const part = this.index ? findPartByPath(this.index, path) : undefined;
-    const rel = part?.rel ?? openableItems(this.index ?? emptyIndex()).find((i) => i.path === path)?.rel ?? path;
+    const root = this.index?.config.root;
+    // display only: files outside the index (e.g. solution files) relative to the course root
+    const rootRel = root && path.startsWith(root) && path.length > root.length ? path.slice(root.length + 1).replace(/\\/g, "/") : null;
+    const rel = part?.rel ?? openableItems(this.index ?? emptyIndex()).find((i) => i.path === path)?.rel ?? rootRel ?? path;
     let alt: AltTab | null = null;
     if (part?.kind === "task" && part.altdirPath && this.index?.altdirAvailable) {
       let altFile: TextFile = { text: "", eol: file.eol, bom: false, mixedEol: false };
@@ -1009,7 +1067,7 @@ export class App {
         const el = h(
           "div",
           { class: `tab${t === this.active ? " active" : ""}${dirty ? " dirty" : ""}`, role: "tab", title: t.rel },
-          h("span", { class: "tab-name" }, t.name.replace(/\.md$/i, "")),
+          h("span", { class: "tab-name" }, this.tabLabel(t)),
           h("span", { class: "tab-dirty", title: ui.tabs.unsaved }, "●"),
           close,
         );
@@ -1299,6 +1357,13 @@ export class App {
       "keydown",
       (e) => {
         const mod = e.metaKey || e.ctrlKey;
+        // Cmd/Ctrl+Alt+L: switch between a task and its solution file (e.code: Option changes e.key on macOS)
+        if (mod && e.altKey && !e.shiftKey && e.code === "KeyL") {
+          e.preventDefault();
+          e.stopPropagation();
+          void this.switchTaskSolution();
+          return;
+        }
         if (!mod || e.altKey) return;
         const key = e.key.toLowerCase();
         let handled = true;

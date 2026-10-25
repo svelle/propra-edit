@@ -21,6 +21,8 @@ export interface AltdirEnv {
   setCollapsed(key: string, collapsed: boolean): void;
   showSolutions(): boolean;
   confirmRenumber(plan: RenumberPlan, state: EditorState): Promise<boolean>;
+  /** Open the solution file as its own tab, at this offset of the solution document. */
+  openFile(offset: number): void;
 }
 
 export const altdirEnv = Facet.define<AltdirEnv, AltdirEnv | null>({ combine: (v) => v[0] ?? null });
@@ -226,6 +228,12 @@ class SolutionWidget extends WidgetType {
       add.addEventListener("click", () => addSolution(view, this.addable!.kind, this.addable!.n));
       head.append(add);
     }
+    const open = document.createElement("button");
+    open.className = "cm-sol-open";
+    open.textContent = "↗";
+    open.title = ui.altdir.openSolution;
+    open.addEventListener("click", () => view.state.facet(altdirEnv)?.openFile(this.ranges[0]?.from ?? 0));
+    head.append(open);
     dom.append(head);
     if (!this.collapsed && c) {
       for (const [k, r] of this.editorKeys()) {

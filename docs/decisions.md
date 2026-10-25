@@ -464,3 +464,15 @@ Still to do: the same measurements on macOS and Windows (the user's machines).
   headings from `sedrila.yaml`, macro names), LanguageTool's own rule messages (they follow
   the checked language, German).
 
+## Opening the solution file
+
+- Three ways: click the „L“ marker in the tree (a dashed box offers to create the file),
+  Cmd/Ctrl+Alt+L (switches task ⇄ solution file, matched on `e.code` because Option changes
+  `e.key` on macOS), and ↗ in an inline solution box (opens at that solution).
+- The task tab edits the same file inline; unsaved inline edits are saved before the file
+  opens as its own tab, so both views start from the same text. Later edits sync through the
+  file watcher (a clean view reloads, a dirty one asks).
+- Solution tabs are labelled „<task> (Lösung)“; the status bar shows the path relative to the
+  course root. The tree's badge columns keep 16 px clear of the scrollbar, which swallowed
+  clicks on the „L“ column.
+

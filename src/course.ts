@@ -46,6 +46,12 @@ export function partNames(index: CourseIndex): Set<string> {
   return names;
 }
 
+/** The task whose altdir solution file is `path`. */
+export function findTaskBySolution(index: CourseIndex, path: string): PartInfo | undefined {
+  for (const ch of index.chapters) for (const tg of ch.taskgroups) for (const t of tg.tasks) if (t.altdirPath === path) return t;
+  return undefined;
+}
+
 export function findPartByPath(index: CourseIndex, path: string): PartInfo | undefined {
   for (const ch of index.chapters) {
     if (ch.part.path === path) return ch.part;
