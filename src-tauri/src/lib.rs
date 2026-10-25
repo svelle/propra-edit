@@ -5,6 +5,7 @@ pub mod applog;
 pub mod build;
 pub mod course;
 pub mod fs;
+pub mod git;
 pub mod lt;
 pub mod settings;
 pub mod watcher;
@@ -214,6 +215,100 @@ async fn lt_restart(app: AppHandle, state: State<'_, AppState>) -> Result<(), St
     lt.set_location(location);
     lt.restart();
     Ok(())
+}
+
+fn git_program(app: &AppHandle) -> String {
+    let cfg = settings_dir(app).map(|d| settings::load(&d)).unwrap_or_default();
+    cfg.get("gitPath").and_then(|v| v.as_str()).unwrap_or("").to_string()
+}
+
+fn git_repos(app: &AppHandle, state: &AppState) -> Result<(String, CourseConfig, Vec<git::Repo>), String> {
+    let cfg = course_config(state)?;
+    let prog = git_program(app);
+    let repos = git::discover(&prog, &cfg.root, cfg.altdir.as_deref());
+    Ok((prog, cfg, repos))
+}
+
+/// The repo with this root (only the course and altdir repos may be operated on).
+fn git_repo(app: &AppHandle, state: &AppState, root: &str) -> Result<(String, git::Repo), String> {
+    let (prog, _, repos) = git_repos(app, state)?;
+    let repo = repos.into_iter().find(|r| r.root == Path::new(root)).ok_or_else(|| format!("Unbekanntes Repository: {root}"))?;
+    Ok((prog, repo))
+}
+
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
+}
+
+/// Status of the course repo and the altdir repo (empty if the course is not in git).
+#[tauri::command]
+async fn git_status(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<git::RepoStatus>, String> {
+    let (prog, cfg, repos) = git_repos(&app, &state)?;
+    blocking(move || {
+        let mut all = git::status_all(&prog, &repos)?;
+        // altdir files belong to the task at the same place below chapterdir
+        if let Some(alt) = &cfg.altdir {
+            for st in all.iter_mut().filter(|s| s.kind == "altdir") {
+                for f in &mut st.files {
+                    if let Ok(rest) = f.path.strip_prefix(alt) {
+                        f.task_path = Some(cfg.chapterdir.join(rest));
+                    }
+                }
+            }
+        }
+        Ok(all)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn git_stage(app: AppHandle, state: State<'_, AppState>, root: String, rels: Vec<String>) -> Result<(), String> {
+    let (prog, repo) = git_repo(&app, &state, &root)?;
+    blocking(move || git::stage(&prog, &repo.root, &rels)).await
+}
+
+#[tauri::command]
+async fn git_unstage(app: AppHandle, state: State<'_, AppState>, root: String, rels: Vec<String>, has_commits: bool) -> Result<(), String> {
+    let (prog, repo) = git_repo(&app, &state, &root)?;
+    blocking(move || git::unstage(&prog, &repo.root, &rels, has_commits)).await
+}
+
+#[tauri::command]
+async fn git_commit(app: AppHandle, state: State<'_, AppState>, root: String, message: String) -> Result<String, String> {
+    let (prog, repo) = git_repo(&app, &state, &root)?;
+    let res = blocking(move || git::commit(&prog, &repo.root, &message)).await;
+    match &res {
+        Ok(_) => applog::info(format!("git commit in {root}")),
+        Err(e) => applog::error(format!("git commit in {root}: {e}")),
+    }
+    res
+}
+
+#[tauri::command]
+async fn git_push(app: AppHandle, state: State<'_, AppState>, root: String, has_upstream: bool) -> Result<String, String> {
+    let (prog, repo) = git_repo(&app, &state, &root)?;
+    let res = blocking(move || git::push(&prog, &repo.root, has_upstream)).await;
+    if let Err(e) = &res {
+        applog::error(format!("git push in {root}: {e}"));
+    }
+    res
+}
+
+#[tauri::command]
+async fn git_pull(app: AppHandle, state: State<'_, AppState>, root: String) -> Result<String, String> {
+    let (prog, repo) = git_repo(&app, &state, &root)?;
+    let res = blocking(move || git::pull(&prog, &repo.root)).await;
+    if let Err(e) = &res {
+        applog::error(format!("git pull in {root}: {e}"));
+    }
+    res
+}
+
+/// A file's content at HEAD (for the diff view); null for files not in HEAD.
+#[tauri::command]
+async fn git_head_text(app: AppHandle, path: String) -> Result<Option<String>, String> {
+    let prog = git_program(&app);
+    blocking(move || git::head_text(&prog, Path::new(&path))).await
 }
 
 #[derive(Serialize)]
@@ -533,6 +628,13 @@ pub fn run() {
             build_default_outdir,
             course_path,
             read_logs,
+            git_status,
+            git_stage,
+            git_unstage,
+            git_commit,
+            git_push,
+            git_pull,
+            git_head_text,
             open_log_dir,
             log_frontend,
             build_start,

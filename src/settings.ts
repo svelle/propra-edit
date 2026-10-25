@@ -31,6 +31,9 @@ export interface Settings {
   /** Build output directory; empty = app cache directory. */
   buildOutDir: string;
   buildPanelHeight: number;
+  gitPanelWidth: number;
+  /** git executable; empty = "git" from PATH. */
+  gitPath: string;
   /** Lint ids silenced per file (key: file path relative to the course root). */
   silencedLints: Record<string, string[]>;
 }
@@ -58,6 +61,8 @@ export const DEFAULT_SETTINGS: Settings = {
   buildCommand: "",
   buildOutDir: "",
   buildPanelHeight: 260,
+  gitPanelWidth: 360,
+  gitPath: "",
   silencedLints: {},
 };
 

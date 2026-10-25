@@ -6,7 +6,7 @@ import { h, showDialog } from "../ui/dom";
 
 export interface SettingsResult {
   changeCourse: boolean;
-  values: Pick<Settings, "fontFamily" | "fontSize" | "softWrap" | "grammarEnabled" | "ltDisabledRules" | "ltEnabledRules" | "buildCommand" | "buildOutDir">;
+  values: Pick<Settings, "fontFamily" | "fontSize" | "softWrap" | "grammarEnabled" | "ltDisabledRules" | "ltEnabledRules" | "buildCommand" | "buildOutDir" | "gitPath">;
 }
 
 export interface SettingsDialogDeps {
@@ -26,6 +26,7 @@ export async function settingsDialog(s: Settings, deps: SettingsDialogDeps): Pro
   const buildCmd = h("input", { type: "text", value: s.buildCommand, placeholder: de.settings.buildCommandDefault, spellcheck: "false" });
   const outDir = h("input", { type: "text", value: s.buildOutDir, spellcheck: "false" });
   void deps.defaultOutDir().then((d) => (outDir.placeholder = d), () => {});
+  const gitPath = h("input", { type: "text", value: s.gitPath, placeholder: "git", spellcheck: "false" });
   const testResult = h("div", { class: "form-hint" });
   const testBtn = h("button", { type: "button" }, de.settings.testSedrila);
   testBtn.addEventListener("click", () => {
@@ -55,6 +56,7 @@ export async function settingsDialog(s: Settings, deps: SettingsDialogDeps): Pro
     h("label", {}, de.settings.buildOutDir, outDir),
     h("div", { class: "form-row" }, testBtn),
     testResult,
+    h("label", {}, de.git.gitPath, gitPath),
   );
   const choice = await showDialog<"ok" | "cancel" | "course">({
     title: de.settings.title,
@@ -79,6 +81,7 @@ export async function settingsDialog(s: Settings, deps: SettingsDialogDeps): Pro
       ltEnabledRules: splitList(enabled.value),
       buildCommand: buildCmd.value.trim(),
       buildOutDir: outDir.value.trim(),
+      gitPath: gitPath.value.trim(),
     },
   };
 }

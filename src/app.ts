@@ -16,6 +16,10 @@ import { glossaryTerms, termInsertion } from "./glossary/model";
 import { GlossaryPanel, type TermUsage } from "./panels/glossary-panel";
 import { PreviewPanel } from "./panels/preview";
 import { openLogs, type LogTab } from "./panels/logs";
+import { GitPanel, isStaged, statusLetter } from "./panels/git-panel";
+import { showDiff } from "./panels/diff";
+import type { GitMark } from "./panels/filetree";
+import type { GitFile, RepoStatus } from "./backend";
 import { BuildPanel } from "./panels/build-panel";
 import { locateProblem, type BuildProblem } from "./build/output";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -95,6 +99,9 @@ export class App {
   private glossaryPanel!: GlossaryPanel;
   private preview!: PreviewPanel;
   private buildPanel!: BuildPanel;
+  private gitPanel!: GitPanel;
+  private gitTimer: number | undefined;
+  private statusGit = h("button", { class: "status-git", hidden: true });
   private buildId = 0;
   private scrollToken = 0;
   private buildProblems = new Map<string, BuildProblem[]>();
@@ -201,10 +208,25 @@ export class App {
       },
     });
     this.view.scrollDOM.addEventListener("scroll", () => this.syncPreview(), { passive: true });
+    this.gitPanel = new GitPanel({
+      status: () => backend.gitStatus(),
+      stage: (root, rels) => backend.gitStage(root, rels),
+      unstage: (root, rels, hasCommits) => backend.gitUnstage(root, rels, hasCommits),
+      commit: (root, message) => backend.gitCommit(root, message),
+      push: (root, up) => backend.gitPush(root, up),
+      pull: (root) => backend.gitPull(root),
+      open: (p) => void this.openFile(p),
+      diff: (f) => void this.diffFile(f.path, f.rel),
+      saveAll: () => this.saveAllDirty(),
+      statusChanged: (repos) => this.onGitStatus(repos),
+      closed: () => this.view.focus(),
+    });
+    this.statusGit.addEventListener("click", () => this.toggleGit());
+    window.addEventListener("focus", () => this.scheduleGitRefresh(100));
     this.buildPanel = new BuildPanel({
       start: async () => {
         if (!this.index) throw new Error(de.build.noCourse);
-        await this.saveAllBeforeBuild();
+        await this.saveAllDirty();
         this.buildId = -1; // accept output that arrives before the id is known
         const [id, cmd] = await backend.buildStart(this.settings.buildCommand, this.settings.buildOutDir);
         this.buildId = id;
@@ -268,6 +290,7 @@ export class App {
       btn(de.altdir.toolbar, de.altdir.toolbarTitle, () => this.toggleSolutions()),
       btn(de.preview.toolbar, de.preview.toolbarTitle(`${modKey()}+Shift+V`), () => this.togglePreview()),
       btn(de.build.toolbar, de.build.toolbarTitle(`${modKey()}+B`), () => void this.buildPanel.run()),
+      btn(de.git.toolbar, de.git.toolbarTitle(`${modKey()}+Shift+G`), () => this.toggleGit()),
       h("span", { class: "spacer" }),
       btn(de.logs.toolbar, de.logs.toolbarTitle, () => void this.showLogs("app")),
       btn("⚙", de.toolbar.settings, () => void this.openSettings()),
@@ -293,7 +316,7 @@ export class App {
       openLintPanel(this.view);
       this.view.focus();
     });
-    const status = h("footer", { class: "statusbar" }, this.statusLeft, this.statusPos, this.statusProblems, h("span", { class: "spacer" }), this.statusRight, this.statusLt);
+    const status = h("footer", { class: "statusbar" }, this.statusLeft, this.statusPos, this.statusProblems, h("span", { class: "spacer" }), this.statusRight, this.statusGit, this.statusLt);
     const rightResizer = h("div", { class: "resizer" });
     const panel = this.glossaryPanel.dom;
     panel.style.width = `${this.settings.rightPanelWidth}px`;
@@ -335,7 +358,27 @@ export class App {
         { once: true },
       );
     });
-    root.replaceChildren(toolbar, h("div", { class: "workspace" }, sidebar, resizer, main, pvResizer, pv, rightResizer, panel), status);
+    const gp = this.gitPanel.dom;
+    gp.style.width = `${this.settings.gitPanelWidth}px`;
+    const gpResizer = h("div", { class: "resizer" });
+    gpResizer.addEventListener("pointerdown", (e) => {
+      if (gp.hidden) return;
+      gpResizer.setPointerCapture(e.pointerId);
+      const startX = e.clientX;
+      const startW = gp.offsetWidth;
+      const move = (ev: PointerEvent) => (gp.style.width = `${Math.max(260, Math.min(900, startW - (ev.clientX - startX)))}px`);
+      gpResizer.addEventListener("pointermove", move);
+      gpResizer.addEventListener(
+        "pointerup",
+        () => {
+          gpResizer.removeEventListener("pointermove", move);
+          this.settings.gitPanelWidth = gp.offsetWidth;
+          saveSettings(this.settings);
+        },
+        { once: true },
+      );
+    });
+    root.replaceChildren(toolbar, h("div", { class: "workspace" }, sidebar, resizer, main, pvResizer, pv, rightResizer, panel, gpResizer, gp), status);
   }
 
   private applyFontSettings() {
@@ -401,6 +444,7 @@ export class App {
     this.index = index;
     this.includeCache.clear();
     this.diskTextCache.clear();
+    this.scheduleGitRefresh(0);
     this.partMap = new Map();
     const addPart = (p: { name: string; title: string | null; rel: string; path: string; kind: string }) => this.partMap!.set(p.name, { name: p.name, title: p.title, rel: p.rel, path: p.path, kind: p.kind });
     for (const ch of index.chapters) {
@@ -671,7 +715,7 @@ export class App {
     return part && part.kind !== "zipdir" ? part.name : this.index.glossary?.path === this.active.path ? "glossary" : null;
   }
 
-  private async saveAllBeforeBuild() {
+  private async saveAllDirty() {
     for (const tab of [...this.tabs]) {
       if (tab === this.active) tab.state = this.view.state;
       if (this.isDirty(tab)) await this.saveTab(tab);
@@ -693,6 +737,56 @@ export class App {
     this.scrollToken++;
     this.view.dispatch({ selection: loc ? EditorSelection.range(loc.from, loc.to) : EditorSelection.cursor(0), effects: EditorView.scrollIntoView(pos, { y: "center" }) });
     this.view.focus();
+  }
+
+  private toggleGit() {
+    if (this.gitPanel.visible) this.gitPanel.hide();
+    else this.gitPanel.show();
+  }
+
+  private scheduleGitRefresh(delay = 600) {
+    if (!this.index) return;
+    window.clearTimeout(this.gitTimer);
+    this.gitTimer = window.setTimeout(() => void this.gitPanel.refresh(), delay);
+  }
+
+  /** Tree markers and status bar from the git status of both repos. */
+  private onGitStatus(repos: RepoStatus[]) {
+    const marks = new Map<string, GitMark>();
+    const code = (f: GitFile): GitMark["code"] => {
+      const l = statusLetter(f, isStaged(f) && f.worktree === ".");
+      return (["M", "A", "?", "D", "R", "U"].includes(l) ? l : "M") as GitMark["code"];
+    };
+    for (const r of repos) {
+      for (const f of r.files) {
+        if (f.submodule) continue;
+        if (r.kind === "course") marks.set(f.path, { code: code(f), alt: marks.get(f.path)?.alt ?? false });
+        else if (f.taskPath) marks.set(f.taskPath, { code: marks.get(f.taskPath)?.code ?? null, alt: true });
+      }
+    }
+    this.tree.setGitMarks(marks);
+    const course = repos.find((r) => r.kind === "course");
+    if (!course) {
+      this.statusGit.hidden = true;
+      return;
+    }
+    const changed = repos.reduce((n, r) => n + r.files.length, 0);
+    const sync = `${course.ahead ? ` ↑${course.ahead}` : ""}${course.behind ? ` ↓${course.behind}` : ""}`;
+    this.statusGit.hidden = false;
+    this.statusGit.textContent = `⎇ ${course.branch ?? de.git.detached}${sync}${changed ? ` · ${changed}` : ""}`;
+    this.statusGit.title = repos.map((r) => `${r.kind === "altdir" ? de.git.altdirRepo : de.git.courseRepo}: ${r.branch ?? "–"}, ${de.git.changes(r.files.length)}`).join("\n");
+  }
+
+  /** Diff of a file (as currently in the editor, if open) against HEAD. */
+  private async diffFile(path: string, rel: string) {
+    let head: string | null;
+    try {
+      head = await backend.gitHeadText(path);
+    } catch (e) {
+      return toast(String(e), "error");
+    }
+    const current = (await this.liveText(path)) ?? "";
+    await showDiff({ title: de.git.diffTitle(rel), head, current, open: () => void this.openFile(path) });
   }
 
   private togglePreview() {
@@ -945,6 +1039,7 @@ export class App {
     }
     this.lastDirty.set(tab, this.isDirty(tab));
     this.renderTabs();
+    this.scheduleGitRefresh();
     toast(de.file.saved(tab.name));
     return true;
   }
@@ -1000,6 +1095,7 @@ export class App {
     const changed = new Set(paths);
     this.usagesCache = null;
     for (const p of paths) this.diskTextCache.delete(p);
+    this.scheduleGitRefresh();
     this.preview.invalidate();
     const gp = this.index?.glossary?.path;
     if (gp && changed.has(gp) && !this.glossaryTab()) void this.loadGlossaryFromDisk();
@@ -1151,6 +1247,8 @@ export class App {
         else if (key === "l" && e.shiftKey) this.toggleSolutions();
         else if (key === "v" && e.shiftKey) this.togglePreview();
         else if (key === "b" && !e.shiftKey) void this.buildPanel.run();
+        else if (key === "g" && e.shiftKey) this.toggleGit();
+        else if (key === "d" && e.shiftKey && this.active) void this.diffFile(this.active.path, this.active.rel);
         else if (e.key === "Tab" && e.ctrlKey && this.tabs.length > 1 && this.active) {
           const i = this.tabs.indexOf(this.active);
           this.activate(this.tabs[(i + (e.shiftKey ? -1 : 1) + this.tabs.length) % this.tabs.length]);

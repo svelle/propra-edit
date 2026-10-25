@@ -14,8 +14,15 @@ export interface FileTreeCallbacks {
   expandedChanged(expanded: string[]): void;
 }
 
+/** Git state of a file in the tree: own change and/or a changed altdir solution. */
+export interface GitMark {
+  code: "M" | "A" | "?" | "D" | "R" | "U" | null;
+  alt: boolean;
+}
+
 export class FileTree {
   readonly dom: HTMLElement;
+  private gitMarks = new Map<string, GitMark>();
   private list: HTMLElement;
   private filterInput: HTMLInputElement;
   private index: CourseIndex | null = null;
@@ -83,6 +90,29 @@ export class FileTree {
     if (q) this.renderFiltered(index, q);
     else this.renderTree(index);
     this.setActive(this.activePath);
+    this.applyGitMarks();
+  }
+
+  setGitMarks(marks: Map<string, GitMark>) {
+    this.gitMarks = marks;
+    this.applyGitMarks();
+  }
+
+  private applyGitMarks() {
+    for (const row of this.list.querySelectorAll<HTMLElement>(".tree-item[data-path]")) {
+      row.querySelector(".git-mark")?.remove();
+      row.classList.remove("git-M", "git-A", "git-new", "git-D", "git-R", "git-U");
+      const m = this.gitMarks.get(row.dataset.path!);
+      if (!m) continue;
+      if (m.code) row.classList.add(`git-${m.code === "?" ? "new" : m.code}`);
+      const titles = [m.code === "?" ? de.git.markNew : m.code === "A" ? de.git.markAdded : m.code ? de.git.markModified : null, m.alt ? de.git.markAlt : null].filter(Boolean);
+      const letter = m.code === "?" ? "N" : m.code === "U" ? "!" : (m.code ?? "");
+      const text = `${letter}${m.alt ? "L" : ""}`;
+      const span = h("span", { class: "git-mark", title: titles.join(", ") }, text);
+      const badges = row.querySelector(".tree-badges");
+      if (badges) badges.prepend(span);
+      else row.append(span);
+    }
   }
 
   private renderFiltered(index: CourseIndex, q: string) {

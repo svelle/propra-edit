@@ -381,3 +381,36 @@ Still to do: the same measurements on macOS and Windows (the user's machines).
   wildcards in that form, so the prefix is dropped for the Java, jar and work directory paths.
   Not confirmed as the cause of the reported Windows failure; the new log will show.
 
+## Phase 8: git
+
+- **git CLI instead of libgit2** (the plan suggested the `git2` crate with CLI fallback):
+  one code path, the user's own configuration, credential helpers and SSH setup apply, no
+  native library to build for two platforms. Commands run without a shell, with
+  `GIT_TERMINAL_PROMPT=0` (never wait for a password prompt nobody can see), stdin closed,
+  `GIT_EDITOR=true`. git must be installed (macOS: Xcode command line tools, `/usr/bin/git`;
+  Windows: Git for Windows on PATH); the settings take a path otherwise.
+- **Repositories:** the work tree containing the course root and, if different, the one
+  containing altdir (in propra-inf a submodule). Status is
+  `git status --porcelain=v2 --branch -z --untracked-files=all --ignore-submodules=dirty`:
+  the submodule pointer only shows as changed in the course repo once altdir's HEAD moved,
+  not for uncommitted altdir edits (those are listed in the altdir section). Paths are
+  spelled like the course index (also through symlinks) so tree markers match.
+- **Commit order:** the panel lists altdir first. Committing in the course repo while altdir
+  has staged changes asks „altdir, dann Kurs committen“: altdir is committed (with its own
+  message, or the course message), the moved submodule pointer is staged automatically, then
+  the course repo is committed. Committing altdir alone also stages the pointer. Verified with
+  a scratch course whose altdir is a real submodule and bare remotes: both repos clean, the
+  course commit points at the new altdir commit, push and pull work.
+- Staging and committing first save unsaved tabs (git works on the files on disk).
+- **Pull** is `git pull --ff-only` (never a merge commit or an editor); diverged branches
+  report git's error. **Push** without upstream pushes `HEAD` to `origin` with `-u`. The
+  ahead/behind numbers come from the last fetch; the panel does not fetch on its own.
+- **Diff:** side-by-side against HEAD with `@codemirror/merge` 6.12.2 (2026-06-09; 6.12.3 is
+  newer than two weeks), current side includes unsaved changes, unchanged stretches collapsed.
+  From the git panel (click a file) or Cmd/Ctrl+Shift+D for the active file.
+- **Tree markers:** letter after the name (M changed, A staged new, N new and untracked,
+  L solution in altdir changed), name colored. Status refreshes after saves, file changes,
+  git actions and when the window gets focus.
+- Not done: discarding changes, conflict resolution, branch switching (plan: none in v1),
+  markers on chapter/taskgroup rows.
+

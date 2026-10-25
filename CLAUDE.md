@@ -33,6 +33,8 @@ On Linux, building needs `libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev lib
 - `src/editor/macros.ts`: macro table (names, arities, block families).
 - `src/editor/propra-language.ts`: CodeMirror language, decorations, folding.
 - `src-tauri/src/build.rs`: sedrila build process (shell, streaming, cancel). `src/build/output.ts`: output parser (pure). `src/panels/build-panel.ts`: build panel.
+- `src-tauri/src/git.rs`: git via the CLI (course repo + altdir submodule). `src/panels/git-panel.ts`, `src/panels/diff.ts`.
+- `src-tauri/src/applog.rs`: app log; `src/panels/logs.ts`: log viewer.
 - `src-tauri/src/lt.rs`: LanguageTool process (start, health check, warm-up, restart) and check proxy.
 - `src/grammar/`: masking (`mask.ts`), batching/caching client (`client.ts`), CodeMirror integration (`grammar.ts`).
 - `src/lint/`: structural lints (`structural.ts`, pure), lint source, completion/hover/click (`assist.ts`), per-file environment facet (`env.ts`). Include paths are resolved in Rust (`course/includes.rs`).

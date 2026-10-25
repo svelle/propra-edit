@@ -63,6 +63,31 @@ export interface CourseConfig {
   baseresourcedir: string | null;
 }
 
+export interface GitFile {
+  path: string;
+  rel: string;
+  index: string;
+  worktree: string;
+  untracked: boolean;
+  conflict: boolean;
+  submodule: boolean;
+  origRel: string | null;
+  /** For altdir files: the task they belong to. */
+  taskPath: string | null;
+}
+
+export interface RepoStatus {
+  root: string;
+  kind: "course" | "altdir";
+  branch: string | null;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  hasCommits: boolean;
+  files: GitFile[];
+  submoduleRel: string | null;
+}
+
 export interface BuildDone {
   id: number;
   code: number | null;
@@ -124,6 +149,13 @@ export const backend = {
   ltCheck: (data: string, disabledRules: string[], enabledRules: string[]) =>
     invoke<string>("lt_check", { data, language: "de-DE", disabledRules, enabledRules }),
   courseCss: () => invoke<string>("course_css"),
+  gitStatus: () => invoke<RepoStatus[]>("git_status"),
+  gitStage: (root: string, rels: string[]) => invoke<void>("git_stage", { root, rels }),
+  gitUnstage: (root: string, rels: string[], hasCommits: boolean) => invoke<void>("git_unstage", { root, rels, hasCommits }),
+  gitCommit: (root: string, message: string) => invoke<string>("git_commit", { root, message }),
+  gitPush: (root: string, hasUpstream: boolean) => invoke<string>("git_push", { root, hasUpstream }),
+  gitPull: (root: string) => invoke<string>("git_pull", { root }),
+  gitHeadText: (path: string) => invoke<string | null>("git_head_text", { path }),
   readLogs: () => invoke<{ dir: string; app: string; languagetool: string }>("read_logs"),
   openLogDir: () => invoke<void>("open_log_dir"),
   logFrontend: (level: "error" | "info", message: string) => invoke<void>("log_frontend", { level, message }),
