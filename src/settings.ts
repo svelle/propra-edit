@@ -39,6 +39,7 @@ export interface Settings {
   buildOutDir: string;
   buildPanelHeight: number;
   gitPanelWidth: number;
+  lintPanelHeight: number;
   /** git executable; empty = "git" from PATH. */
   gitPath: string;
   /** Lint ids silenced per file (key: file path relative to the course root). */
@@ -72,6 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
   buildOutDir: "",
   buildPanelHeight: 260,
   gitPanelWidth: 360,
+  lintPanelHeight: 160,
   gitPath: "",
   silencedLints: {},
 };

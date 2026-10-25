@@ -26,7 +26,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { altdirField, altdirLoad, altdirStateExtension, type AltdirDoc, type RenumberPlan } from "./altdir/state";
 import { altdirViewExtension, setSolutionsVisible, type AltdirEnv } from "./altdir/widgets";
 import { applyChanges, type TextChange } from "./altdir/segments";
-import { diagnosticCount, forceLinting, openLintPanel } from "@codemirror/lint";
+import { diagnosticCount, forceLinting } from "@codemirror/lint";
+import { setLintPanelHeight, toggleLintPanel } from "./editor/lint-panel";
 import { lintRefresh } from "./editor/refresh";
 import { propraAssist } from "./lint/assist";
 import { propraEnv, type IncludeQuery, type PartRef, type PropraEnv, type TermRef } from "./lint/env";
@@ -332,7 +333,7 @@ export class App {
     });
     const main = h("main", { class: "main" }, this.tabBar, this.editorHost, this.welcome, this.buildPanel.dom);
     this.statusProblems.addEventListener("click", () => {
-      openLintPanel(this.view);
+      toggleLintPanel(this.view);
       this.view.focus();
     });
     const status = h("footer", { class: "statusbar" }, this.statusLeft, this.statusPos, this.statusProblems, h("span", { class: "spacer" }), this.statusRight, this.statusGit, this.statusLt);
@@ -411,6 +412,7 @@ export class App {
     root.style.setProperty("--editor-font-size", `${s.fontSize}px`);
     root.style.setProperty("--prose-font", s.proseFontFamily || DEFAULT_SETTINGS.proseFontFamily);
     root.classList.toggle("prose-proportional", s.proportionalProse);
+    setLintPanelHeight(s.lintPanelHeight);
     root.classList.toggle("wrap-column", s.wrapMode === "column");
     const measure = () => {
       const font = s.proportionalProse ? s.proseFontFamily || DEFAULT_SETTINGS.proseFontFamily : s.fontFamily;
@@ -624,6 +626,10 @@ export class App {
       topMatter: isMarkdown && hasTopMatter(this.index, tab.path, text),
       parserConfig: parserConfigFor(this.index),
       softWrap: this.lineWrap(),
+      lintPanelSaved: (px) => {
+        this.settings.lintPanelHeight = Math.round(px);
+        saveSettings(this.settings);
+      },
       extra: EditorView.updateListener.of((u: ViewUpdate) => this.onEditorUpdate(u)),
       markdownExtra: [propraEnv.of(this.makeEnv(tab.path)), structuralLinter(), propraAssist(), this.grammar.extension(), altExt],
     });

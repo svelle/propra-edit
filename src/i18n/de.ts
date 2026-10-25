@@ -307,7 +307,7 @@ export const de = {
   },
   problems: {
     count: (n: number) => `⚠ ${n} ${n === 1 ? "Hinweis" : "Hinweise"}`,
-    title: "Problemliste öffnen (Cmd/Strg+Shift+M)",
+    title: "Problemliste ein-/ausblenden (Cmd/Strg+Shift+M), oberen Rand ziehen zum Vergrößern",
   },
   quickFix: {
     title: "Schnellkorrektur",

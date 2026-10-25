@@ -612,3 +612,8 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .status-path { direction: rtl; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 40px; text-align: left; }
 .status-path-inner { direction: ltr; unicode-bidi: isolate; }
 .status-file { flex: none; }
+
+/* ----- problem list: resizable at its top edge */
+.cm-panel.cm-panel-lint ul { max-height: none !important; height: var(--lint-panel-height, 160px); }
+.cm-lint-grip { position: absolute; top: -3px; left: 0; right: 0; height: 7px; cursor: row-resize; z-index: 5; }
+.cm-lint-grip:hover { background: var(--accent); opacity: 0.35; }

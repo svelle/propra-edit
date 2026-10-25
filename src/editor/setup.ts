@@ -19,6 +19,7 @@ import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/sea
 import { languages } from "@codemirror/language-data";
 import { propraLanguage } from "./propra-language";
 import { sectionHeader } from "./section-header";
+import { lintPanelExtras } from "./lint-panel";
 import { lintKeymap } from "@codemirror/lint";
 import { quickFixKeymap } from "./quickfix";
 import type { ParserConfig } from "./parser";
@@ -35,6 +36,8 @@ export interface FileSetup {
   topMatter: boolean;
   parserConfig: ParserConfig;
   softWrap: boolean;
+  /** Called with the problem list height after the user resized it. */
+  lintPanelSaved?: (px: number) => void;
   /** Extra extensions from the app (update listener, key bindings). */
   extra: Extension;
   /** Extra extensions for Markdown files only (grammar, lints, completion). */
@@ -97,6 +100,7 @@ export function createState(text: string, setup: FileSetup): EditorState {
       wrapCompartment.of(setup.softWrap ? EditorView.lineWrapping : []),
       languageCompartment.of(setup.isMarkdown ? propraLanguage({ topMatter: setup.topMatter, cfg: setup.parserConfig }) : []),
       setup.isMarkdown ? [setup.markdownExtra, sectionHeader()] : [],
+      lintPanelExtras(setup.lintPanelSaved ?? (() => {})),
       keymap.of([...quickFixKeymap, ...lintKeymap]),
       setup.extra,
     ],
