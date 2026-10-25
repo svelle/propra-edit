@@ -617,3 +617,6 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .cm-panel.cm-panel-lint ul { max-height: none !important; height: var(--lint-panel-height, 160px); }
 .cm-lint-grip { position: absolute; top: -3px; left: 0; right: 0; height: 7px; cursor: row-resize; z-index: 5; }
 .cm-lint-grip:hover { background: var(--accent); opacity: 0.35; }
+
+/* a resize handle exists only while its panel is shown */
+.resizer:has(+ [hidden]) { display: none; }

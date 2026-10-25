@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Used only by scripts/fetch-runtime.*: resolves the LanguageTool server and the German
-     language module from Maven Central (checksums verified with mvn -C). -->
+<!-- Used only by scripts/fetch-runtime.*: resolves the LanguageTool server with the German and
+     English language modules from Maven Central (checksums verified with mvn -C).
+     languagetool-server depends on language-all (about 30 languages, ~250 MB of jars);
+     that dependency is excluded so only German and English are bundled for checking.
+     Spanish, Catalan and Portuguese are included only because the server's language
+     detector (CommonWordsDetector) looks them up at start-up and the server exits without
+     them (~21 MB). -->
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
   <groupId>de.svelle.propra-editor</groupId>
@@ -15,10 +20,37 @@
       <groupId>org.languagetool</groupId>
       <artifactId>languagetool-server</artifactId>
       <version>${languagetool.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.languagetool</groupId>
+          <artifactId>language-all</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.languagetool</groupId>
       <artifactId>language-de</artifactId>
+      <version>${languagetool.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.languagetool</groupId>
+      <artifactId>language-en</artifactId>
+      <version>${languagetool.version}</version>
+    </dependency>
+    <!-- required by the server's language detector, see above -->
+    <dependency>
+      <groupId>org.languagetool</groupId>
+      <artifactId>language-es</artifactId>
+      <version>${languagetool.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.languagetool</groupId>
+      <artifactId>language-ca</artifactId>
+      <version>${languagetool.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.languagetool</groupId>
+      <artifactId>language-pt</artifactId>
       <version>${languagetool.version}</version>
     </dependency>
   </dependencies>

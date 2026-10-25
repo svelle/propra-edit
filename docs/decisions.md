@@ -439,3 +439,14 @@ Still to do: the same measurements on macOS and Windows (the user's machines).
 - **Not done:** hiding URLs until the cursor enters a link (possible, but changes what is
   seen while typing), an outline panel, hanging indent for wrapped list items.
 
+## Bundles and LanguageTool size
+
+- Installers: only the `.dmg` (macOS) and the NSIS setup `.exe` (Windows); no MSI, no loose
+  `.app` in the CI artifacts.
+- `languagetool-server` depends on `language-all` (about 30 languages, 252 MB of jars). It is
+  excluded; bundled are German and English, plus Spanish, Catalan and Portuguese, because the
+  server's language detector (`CommonWordsDetector`) looks those three up at start-up and the
+  server exits with "'es' is not a language code known to LanguageTool" without them.
+  Result: 119 MB of jars; the end-to-end check passes.
+- Resize handles of side panels are hidden while the panel is hidden (they looked usable).
+

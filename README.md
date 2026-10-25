@@ -12,8 +12,8 @@ sedrila build with problems linked to files, git for the course repo and the alt
 ## Use
 
 1. Download the build for your platform from the latest CI run (artifacts
-   `propra-editor-macos-latest` / `propra-editor-windows-latest`), or build it yourself
-   (see `CLAUDE.md`).
+   `propra-editor-macos-latest` with the `.dmg`, `propra-editor-windows-latest` with the
+   setup `.exe`), or build it yourself (see `CLAUDE.md`).
 2. The builds are unsigned. macOS: right-click the app, „Öffnen“, then confirm.
    Windows: SmartScreen „Weitere Informationen“, then „Trotzdem ausführen“.
 3. On first start choose the course folder (the one containing `sedrila.yaml`).

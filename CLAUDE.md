@@ -10,7 +10,7 @@ sedrila's `docs/authors.md` is the authoritative spec for the file format.
 npm ci                      # install frontend deps (exact versions, legacy-peer-deps via .npmrc)
 npm run dev                 # Vite only (browser, no Rust backend)
 npx tauri dev               # full app with hot reload
-npx tauri build             # release bundles (.app/.dmg, .msi/.exe)
+npx tauri build             # release bundles (.dmg on macOS, NSIS setup .exe on Windows)
 npx tauri build --debug --no-bundle   # quick debug binary with embedded frontend
 
 npm run typecheck           # tsc --noEmit
